@@ -16,25 +16,30 @@ function loadFonts() {
   if (cachedFontFiles && cachedFontFiles.length) return { fontFiles: cachedFontFiles, fontBuffers: cachedFontBuffers };
   const files = [];
   const buffers = [];
+  const loadedNames = new Set();
   const searchDirs = [
     path.join(__dirname, 'fonts'),
+    path.join(__dirname, '..', 'api', 'fonts'),
+    path.join(__dirname, '..', 'fonts'),
     path.join(process.cwd(), 'api', 'fonts'),
     path.join(process.cwd(), 'fonts'),
+    '/var/task/api/fonts',
+    '/var/task/fonts',
   ];
   for (const dir of searchDirs) {
     try {
       if (fs.existsSync(dir)) {
         const found = fs.readdirSync(dir)
-          .filter(f => f.endsWith('.ttf') || f.endsWith('.otf'))
-          .map(f => path.join(dir, f));
-        if (found.length > 0) {
-          for (const f of found) {
+          .filter(f => f.endsWith('.ttf') || f.endsWith('.otf'));
+        for (const file of found) {
+          if (!loadedNames.has(file)) {
+            const fullPath = path.join(dir, file);
             try {
-              files.push(f);
-              buffers.push(fs.readFileSync(f));
+              files.push(fullPath);
+              buffers.push(fs.readFileSync(fullPath));
+              loadedNames.add(file);
             } catch {}
           }
-          break;
         }
       }
     } catch {}
@@ -245,9 +250,30 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  const query = req.query || {};
+
+  // Instant runtime health check for deployment & font inspection
+  if (query.health === '1' || query.health === 'true') {
+    const { fontFiles } = loadFonts();
+    return res.status(200).json({
+      status: 'ok',
+      version: '2.1.0',
+      timestamp: new Date().toISOString(),
+      cwd: process.cwd(),
+      __dirname,
+      fonts: (fontFiles || []).map(f => path.basename(f)),
+      fontCount: (fontFiles || []).length,
+      searchDirs: [
+        path.join(__dirname, 'fonts'),
+        path.join(process.cwd(), 'api', 'fonts'),
+        path.join(process.cwd(), 'fonts'),
+        '/var/task/api/fonts'
+      ].map(d => ({ path: d, exists: fs.existsSync(d) }))
+    });
+  }
+
   // If user opens /api in browser without parameters, redirect to documentation
   const isHtml = req.headers.accept && req.headers.accept.includes('text/html');
-  const query = req.query || {};
   const hasParams = query.url || query.title || query.svg;
   if (isHtml && !hasParams && req.method === 'GET') {
     if (typeof res.redirect === 'function') {
@@ -420,6 +446,8 @@ export default async function handler(req, res) {
     // Edge surrogate standard
     res.setHeader('Surrogate-Control', 'max-age=31536000');
     res.setHeader('Vary', 'Accept-Encoding');
+    res.setHeader('X-Engine-Fonts', String(fontFiles ? fontFiles.length : 0));
+    res.setHeader('X-Engine-Version', '2.1.0');
 
     return res.status(200).send(outputBuffer);
   } catch (error) {
