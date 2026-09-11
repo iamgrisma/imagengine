@@ -88,17 +88,22 @@ export default async function handler(req, res) {
 
   // If user opens /api in browser without parameters, redirect to documentation
   const isHtml = req.headers.accept && req.headers.accept.includes('text/html');
-  const hasParams = req.query.url || req.query.title || req.query.svg;
+  const query = req.query || {};
+  const hasParams = query.url || query.title || query.svg;
   if (isHtml && !hasParams && req.method === 'GET') {
-    return res.redirect(302, '/docs');
+    if (typeof res.redirect === 'function') {
+      return res.redirect(302, '/docs');
+    }
+    res.writeHead(302, { Location: '/docs' });
+    return res.end();
   }
 
   try {
     let svgContent = '';
 
     // 1. Remote SVG URL Mode (?url=https://...)
-    if (req.query.url) {
-      const sourceUrl = decodeURIComponent(req.query.url);
+    if (query.url) {
+      const sourceUrl = decodeURIComponent(query.url);
 
       if (!sourceUrl.startsWith('http://') && !sourceUrl.startsWith('https://')) {
         return res.status(400).json({ error: 'Invalid URL scheme. Only HTTP and HTTPS are permitted.' });
@@ -121,18 +126,28 @@ export default async function handler(req, res) {
       }
 
       if (!upstream.ok) {
-        return res.status(502).json({ error: `Upstream error fetching SVG (Status ${upstream.status})` });
+        // Graceful fallback to dynamic card if title is available
+        if (query.title) {
+          svgContent = buildDefaultSvg(query.title, query.subtitle, query.badge);
+        } else {
+          return res.status(502).json({ error: `Upstream error fetching SVG (Status ${upstream.status})` });
+        }
+      } else {
+        svgContent = await upstream.text();
       }
-
-      svgContent = await upstream.text();
     }
     // 2. Direct POST Raw SVG Body
-    else if (req.method === 'POST' && typeof req.body === 'string' && req.body.includes('<svg')) {
-      svgContent = req.body;
+    else if (req.method === 'POST') {
+      const raw = Buffer.isBuffer(req.body)
+        ? req.body.toString('utf8')
+        : (typeof req.body === 'string' ? req.body : (req.body ? JSON.stringify(req.body) : ''));
+      if (raw && raw.includes('<svg')) {
+        svgContent = raw;
+      }
     }
     // 3. Built-in Dynamic Card (?title=...&subtitle=...&badge=...)
-    else if (req.query.title) {
-      svgContent = buildDefaultSvg(req.query.title, req.query.subtitle, req.query.badge);
+    else if (query.title) {
+      svgContent = buildDefaultSvg(query.title, query.subtitle, query.badge);
     }
     // 4. Default Demonstration Card
     else {
@@ -152,9 +167,9 @@ export default async function handler(req, res) {
       return res.status(413).json({ error: 'SVG payload exceeds 512 KB limit' });
     }
 
-    const width = Math.min(Math.max(parseInt(req.query.width, 10) || 1200, 100), 2400);
-    const format = (req.query.format || 'png').toLowerCase();
-    const quality = Math.min(Math.max(parseInt(req.query.quality, 10) || 85, 10), 100);
+    const width = Math.min(Math.max(parseInt(query.width, 10) || 1200, 100), 2400);
+    const format = (query.format || 'png').toLowerCase();
+    const quality = Math.min(Math.max(parseInt(query.quality, 10) || 85, 10), 100);
 
     // Rasterize SVG via Rust-compiled Resvg core
     const resvg = new Resvg(svgContent, {
