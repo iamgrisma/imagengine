@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Documentation — ImageEngine</title>
+  <meta name="description" content="Complete developer documentation for the ImageEngine universal SVG to image edge rasterizer API.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background-color: #030712; color: #f3f4f6; }
+    pre { background-color: #0b0f19; border: 1px solid #1e293b; border-radius: 0.75rem; padding: 1rem; overflow-x: auto; font-family: monospace; font-size: 0.825rem; color: #38bdf8; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-cyan-500 selection:text-white">
+
+  <!-- Navigation -->
+  <header class="border-b border-gray-800/80 sticky top-0 backdrop-blur-md bg-gray-950/70 z-50">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 font-black text-white text-lg">⚡</div>
+        <span class="font-extrabold text-xl tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">ImageEngine Docs</span>
+      </a>
+      <nav class="flex items-center gap-6 text-sm font-medium text-gray-400">
+        <a href="/" class="hover:text-cyan-400 transition-colors">Home & Playground</a>
+        <a href="/privacy" class="hover:text-cyan-400 transition-colors">Privacy</a>
+        <a href="/terms" class="hover:text-cyan-400 transition-colors">Terms</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Docs Content -->
+  <main class="flex-grow max-w-4xl mx-auto px-4 py-12">
+    <div class="mb-10 pb-6 border-b border-gray-800">
+      <h1 class="text-3xl sm:text-4xl font-black text-white mb-3">API Reference</h1>
+      <p class="text-gray-400 text-sm sm:text-base">
+        The ImageEngine API allows any web application to convert dynamic or static SVG graphics into high-resolution PNG, JPG, or WebP formats at edge speed.
+      </p>
+    </div>
+
+    <!-- Endpoint -->
+    <section class="mb-12 space-y-4">
+      <h2 class="text-xl font-bold text-white flex items-center gap-2"><span class="px-2 py-0.5 rounded bg-cyan-900/60 border border-cyan-500/40 text-cyan-300 text-xs font-mono">GET</span> /api</h2>
+      <p class="text-sm text-gray-400">Renders and returns an image binary directly with standard <code>Content-Type</code> headers.</p>
+      
+      <pre><code>GET https://imagengine.grisma.com.np/api?url={ENCODED_SVG_URL}&format={png|jpg|webp}&width=1200</code></pre>
+    </section>
+
+    <!-- Query Parameters -->
+    <section class="mb-12">
+      <h2 class="text-xl font-bold text-white mb-4">Query Parameters</h2>
+      <div class="overflow-x-auto border border-gray-800 rounded-2xl">
+        <table class="w-full text-left text-xs sm:text-sm">
+          <thead class="bg-gray-900/80 text-gray-400 uppercase font-semibold border-b border-gray-800">
+            <tr>
+              <th class="p-3.5">Parameter</th>
+              <th class="p-3.5">Type</th>
+              <th class="p-3.5">Default</th>
+              <th class="p-3.5">Description</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-800/60 text-gray-300">
+            <tr>
+              <td class="p-3.5 font-mono text-cyan-400">url</td>
+              <td class="p-3.5 text-gray-400">string</td>
+              <td class="p-3.5 text-gray-500">—</td>
+              <td class="p-3.5">Full URL of the source SVG to fetch and rasterize. Must be URL-encoded.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-mono text-cyan-400">format</td>
+              <td class="p-3.5 text-gray-400">string</td>
+              <td class="p-3.5 font-mono text-gray-400">png</td>
+              <td class="p-3.5">Target raster format. Options: <code>png</code>, <code>jpg</code>, <code>webp</code>.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-mono text-cyan-400">width</td>
+              <td class="p-3.5 text-gray-400">number</td>
+              <td class="p-3.5 font-mono text-gray-400">1200</td>
+              <td class="p-3.5">Target width in pixels (100 to 2400). Aspect ratio is strictly preserved.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-mono text-cyan-400">quality</td>
+              <td class="p-3.5 text-gray-400">number</td>
+              <td class="p-3.5 font-mono text-gray-400">85</td>
+              <td class="p-3.5">Compression quality for <code>jpg</code> and <code>webp</code> (10 to 100).</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-mono text-cyan-400">title</td>
+              <td class="p-3.5 text-gray-400">string</td>
+              <td class="p-3.5 text-gray-500">—</td>
+              <td class="p-3.5">Built-in generator mode: Headline text.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-mono text-cyan-400">subtitle</td>
+              <td class="p-3.5 text-gray-400">string</td>
+              <td class="p-3.5 text-gray-500">—</td>
+              <td class="p-3.5">Built-in generator mode: Subtitle text.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-mono text-cyan-400">badge</td>
+              <td class="p-3.5 text-gray-400">string</td>
+              <td class="p-3.5 text-gray-500">—</td>
+              <td class="p-3.5">Built-in generator mode: Top pill badge label.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Code Examples -->
+    <section class="mb-12 space-y-6">
+      <h2 class="text-xl font-bold text-white">Integration Examples</h2>
+
+      <div>
+        <h3 class="text-sm font-semibold text-gray-300 mb-2">1. HTML Open Graph Tag (for WhatsApp & Facebook)</h3>
+        <pre><code>&lt;meta property="og:image" content="https://imagengine.grisma.com.np/api?url=https%3A%2F%2Felection.topnepali.com%2Fapi%2Fog.svg%3Ftitle%3DKathmandu-4&amp;format=png" /&gt;
+&lt;meta property="og:image:width" content="1200" /&gt;
+&lt;meta property="og:image:height" content="630" /&gt;
+&lt;meta property="og:image:type" content="image/png" /&gt;</code></pre>
+      </div>
+
+      <div>
+        <h3 class="text-sm font-semibold text-gray-300 mb-2">2. cURL</h3>
+        <pre><code>curl -o preview.png "https://imagengine.grisma.com.np/api?title=Hello+World&amp;format=png"</code></pre>
+      </div>
+
+      <div>
+        <h3 class="text-sm font-semibold text-gray-300 mb-2">3. React / Next.js / Astro Component</h3>
+        <pre><code>export function getOgImageUrl(svgPath) {
+  const base = 'https://imagengine.grisma.com.np/api';
+  return `${base}?url=${encodeURIComponent(svgPath)}&amp;format=png`;
+}</code></pre>
+      </div>
+    </section>
+
+    <!-- Caching Specs -->
+    <section class="p-6 rounded-2xl bg-gray-900/50 border border-gray-800 space-y-2">
+      <h2 class="text-base font-bold text-white">Edge CDN Caching Specifications</h2>
+      <p class="text-xs sm:text-sm text-gray-400">
+        Every response sends <code>Cache-Control: public, max-age=604800, s-maxage=31536000, stale-while-revalidate=86400</code>.
+        The edge caches the generated file for 1 full year globally. Repeat requests load in under 15 milliseconds.
+      </p>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-900 bg-gray-950 py-10 text-xs text-gray-500">
+    <div class="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div>© 2026 ImageEngine — Built by Grisma.</div>
+      <div class="flex items-center gap-6">
+        <a href="/" class="hover:text-gray-300">Home</a>
+        <a href="/privacy" class="hover:text-gray-300">Privacy Policy</a>
+        <a href="/terms" class="hover:text-gray-300">Terms of Service</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

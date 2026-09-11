@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — ImageEngine</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>body { background-color: #030712; color: #f3f4f6; }</style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+  <header class="border-b border-gray-800/80 sticky top-0 backdrop-blur-md bg-gray-950/70 z-50">
+    <div class="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="font-extrabold text-lg text-white flex items-center gap-2"><span>⚡</span> ImageEngine</a>
+      <nav class="flex gap-4 text-xs font-semibold text-gray-400">
+        <a href="/" class="hover:text-white">Home</a>
+        <a href="/docs" class="hover:text-white">Docs</a>
+        <a href="/terms" class="hover:text-white">Terms</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="flex-grow max-w-3xl mx-auto px-4 py-12 text-sm leading-relaxed text-gray-300 space-y-6">
+    <h1 class="text-3xl font-black text-white">Privacy Policy</h1>
+    <p class="text-xs text-gray-500">Effective Date: September 2026</p>
+
+    <div class="space-y-4">
+      <h2 class="text-lg font-bold text-white">1. Overview</h2>
+      <p>ImageEngine is a free, privacy-first edge service operated by Grisma. We do not track, profile, sell, or collect personal data from users or automated crawlers.</p>
+
+      <h2 class="text-lg font-bold text-white">2. Transient Processing & No Storage</h2>
+      <p>ImageEngine processes incoming SVG content purely in volatile RAM to rasterize pixel buffers. We do not maintain any persistent database of your images, URLs, or metadata.</p>
+
+      <h2 class="text-lg font-bold text-white">3. Third-Party CDN Caching</h2>
+      <p>Rendered image binaries are cached at the edge network (Vercel / Cloudflare) to ensure fast content delivery for scrapers and end-users. These caches contain only the public image bytes.</p>
+
+      <h2 class="text-lg font-bold text-white">4. No Cookies or Trackers</h2>
+      <p>The ImageEngine API and documentation pages do not set tracking cookies or embed advertising tracking scripts.</p>
+
+      <h2 class="text-lg font-bold text-white">5. Contact</h2>
+      <p>If you have questions regarding this policy, contact us via <a href="https://grisma.com.np" class="text-cyan-400 underline">grisma.com.np</a>.</p>
+    </div>
+  </main>
+
+  <footer class="border-t border-gray-900 bg-gray-950 py-8 text-xs text-gray-500 text-center">
+    © 2026 ImageEngine — Built by Grisma.
+  </footer>
+</body>
+</html>

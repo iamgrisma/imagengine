@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ImageEngine — Free Universal SVG to Image Edge API</title>
+  <meta name="description" content="Free, open-source high performance SVG to PNG, JPG, and WebP rasterizer API running on global edge network with automatic CDN caching.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background-color: #030712; color: #f3f4f6; }
+    .glow-cyan { text-shadow: 0 0 25px rgba(56, 189, 248, 0.4); }
+    .glow-box { box-shadow: 0 0 50px -10px rgba(56, 189, 248, 0.15); }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-cyan-500 selection:text-white">
+
+  <!-- Navigation -->
+  <header class="border-b border-gray-800/80 sticky top-0 backdrop-blur-md bg-gray-950/70 z-50">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 font-black text-white text-lg">⚡</div>
+        <span class="font-extrabold text-xl tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">ImageEngine</span>
+      </a>
+      <nav class="flex items-center gap-6 text-sm font-medium text-gray-400">
+        <a href="#playground" class="hover:text-cyan-400 transition-colors">Playground</a>
+        <a href="/docs" class="hover:text-cyan-400 transition-colors">Docs & API</a>
+        <a href="https://github.com/iamgrisma" target="_blank" class="px-3.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold transition-colors border border-gray-700/60">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <main class="flex-grow">
+    <section class="max-w-4xl mx-auto px-4 pt-20 pb-12 text-center">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-xs font-semibold mb-6">
+        <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+        100% Free Edge Microservice & CDN
+      </div>
+      <h1 class="text-4xl sm:text-6xl font-black tracking-tight leading-tight mb-6">
+        Convert Any <span class="bg-gradient-to-r from-cyan-400 via-sky-300 to-indigo-400 bg-clip-text text-transparent">SVG to Raster</span> at the Edge.
+      </h1>
+      <p class="text-base sm:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+        Ultra-low latency SVG to PNG, JPG, and WebP converter. Built for WhatsApp previews, Open Graph social share cards, dynamic badges, and automated image pipelines.
+      </p>
+
+      <div class="flex flex-wrap items-center justify-center gap-4 text-sm font-semibold">
+        <a href="#playground" class="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/25 transition-all">Try Playground</a>
+        <a href="/docs" class="px-6 py-3 rounded-xl bg-gray-900 hover:bg-gray-800 text-gray-300 border border-gray-800 transition-all">View API Documentation</a>
+      </div>
+    </section>
+
+    <!-- Interactive Live Playground -->
+    <section id="playground" class="max-w-5xl mx-auto px-4 py-12">
+      <div class="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 sm:p-8 glow-box">
+        <div class="flex items-center justify-between mb-6 pb-4 border-b border-gray-800">
+          <div>
+            <h2 class="text-xl font-bold text-white flex items-center gap-2"><span>🧪</span> Live API Playground</h2>
+            <p class="text-xs text-gray-400">Test any SVG URL and view live rendered output with instant CDN preview.</p>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="setSample('election')" class="text-xs px-2.5 py-1 rounded-md bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors">Sample Election</button>
+            <button onclick="setSample('custom')" class="text-xs px-2.5 py-1 rounded-md bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors">Custom Title</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <!-- Controls -->
+          <div class="lg:col-span-5 space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Source Mode</label>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <button id="btn-mode-url" onclick="switchMode('url')" class="py-2 rounded-lg bg-cyan-600 text-white font-semibold transition-all">Remote SVG URL</button>
+                <button id="btn-mode-title" onclick="switchMode('title')" class="py-2 rounded-lg bg-gray-800 text-gray-300 font-semibold transition-all">Title / Badge</button>
+              </div>
+            </div>
+
+            <!-- URL Input -->
+            <div id="group-url">
+              <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">SVG URL</label>
+              <input type="url" id="input-url" placeholder="https://election.topnepali.com/api/og.svg?title=Kathmandu-4" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-cyan-500 font-mono">
+            </div>
+
+            <!-- Title & Subtitle Input -->
+            <div id="group-title" class="space-y-3 hidden">
+              <div>
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Headline Title</label>
+                <input type="text" id="input-title" value="Kathmandu Constituency 4" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Subtitle</label>
+                <input type="text" id="input-subtitle" value="Gagan Kumar Thapa (Nepali Congress) — 21,302 Votes" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Badge</label>
+                <input type="text" id="input-badge" value="2079 House of Representatives" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500">
+              </div>
+            </div>
+
+            <!-- Settings -->
+            <div class="grid grid-cols-2 gap-3 pt-2">
+              <div>
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Format</label>
+                <select id="select-format" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500">
+                  <option value="png" selected>PNG (Lossless, Crisp)</option>
+                  <option value="jpg">JPG (Smaller KB)</option>
+                  <option value="webp">WebP (Modern)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Target Width</label>
+                <select id="select-width" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500">
+                  <option value="1200" selected>1200px (Standard OG)</option>
+                  <option value="800">800px (Medium)</option>
+                  <option value="600">600px (Thumbnail)</option>
+                </select>
+              </div>
+            </div>
+
+            <button onclick="generatePreview()" class="w-full py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold text-sm tracking-wide transition-all shadow-md shadow-cyan-500/20">
+              Render Image Now ›
+            </button>
+          </div>
+
+          <!-- Preview & Code Output -->
+          <div class="lg:col-span-7 flex flex-col justify-between space-y-4">
+            <div>
+              <div class="flex items-center justify-between text-xs text-gray-400 mb-2">
+                <span class="font-semibold uppercase tracking-wider">Live Rendered Image</span>
+                <span id="preview-status" class="text-cyan-400 font-mono">Ready</span>
+              </div>
+              <div class="w-full aspect-[1200/630] rounded-2xl bg-gray-950 border border-gray-800 overflow-hidden flex items-center justify-center relative group">
+                <img id="preview-img" src="/api?title=ImageEngine+Preview&subtitle=Universal+SVG+to+Image+Edge+API&badge=Online" alt="Live Preview" class="w-full h-full object-contain">
+                <div id="preview-spinner" class="absolute inset-0 bg-gray-950/80 backdrop-blur-sm flex items-center justify-center hidden">
+                  <div class="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between text-xs text-gray-400 mb-1.5">
+                <span class="font-semibold uppercase tracking-wider">Generated Endpoint URL</span>
+                <button onclick="copyUrl()" class="text-cyan-400 hover:underline font-medium">Copy URL</button>
+              </div>
+              <div class="relative">
+                <input id="output-url" readonly class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-xs text-cyan-300 font-mono focus:outline-none">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Feature Grid -->
+    <section class="max-w-5xl mx-auto px-4 py-16">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="p-6 rounded-2xl bg-gray-900/40 border border-gray-800/80">
+          <div class="text-2xl mb-3">⚡</div>
+          <h3 class="font-bold text-white mb-2">Rust-Powered Core</h3>
+          <p class="text-sm text-gray-400">Uses native Resvg engine to rasterize SVGs in 8–15ms with full CSS gradients and filter support.</p>
+        </div>
+        <div class="p-6 rounded-2xl bg-gray-900/40 border border-gray-800/80">
+          <div class="text-2xl mb-3">🌍</div>
+          <h3 class="font-bold text-white mb-2">1-Year Global Edge Cache</h3>
+          <p class="text-sm text-gray-400">Images are cached across 300+ edge datacenters worldwide with <code>s-maxage=31536000</code> for 10ms repeat hits.</p>
+        </div>
+        <div class="p-6 rounded-2xl bg-gray-900/40 border border-gray-800/80">
+          <div class="text-2xl mb-3">📱</div>
+          <h3 class="font-bold text-white mb-2">WhatsApp & Social Ready</h3>
+          <p class="text-sm text-gray-400">Generates clean pixel formats (PNG & JPG) so scrapers on WhatsApp, Facebook, and Twitter show full cards.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-900 bg-gray-950 py-10 text-xs text-gray-500">
+    <div class="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div>
+        © 2026 ImageEngine — Built by <a href="https://grisma.com.np" class="text-gray-300 hover:text-white font-medium">Grisma</a>. Free & Open for Developers.
+      </div>
+      <div class="flex items-center gap-6">
+        <a href="/docs" class="hover:text-gray-300">Docs</a>
+        <a href="/privacy" class="hover:text-gray-300">Privacy Policy</a>
+        <a href="/terms" class="hover:text-gray-300">Terms of Service</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    let activeMode = 'url';
+
+    function switchMode(mode) {
+      activeMode = mode;
+      const btnUrl = document.getElementById('btn-mode-url');
+      const btnTitle = document.getElementById('btn-mode-title');
+      const groupUrl = document.getElementById('group-url');
+      const groupTitle = document.getElementById('group-title');
+
+      if (mode === 'url') {
+        btnUrl.className = 'py-2 rounded-lg bg-cyan-600 text-white font-semibold transition-all';
+        btnTitle.className = 'py-2 rounded-lg bg-gray-800 text-gray-300 font-semibold transition-all';
+        groupUrl.classList.remove('hidden');
+        groupTitle.classList.add('hidden');
+      } else {
+        btnTitle.className = 'py-2 rounded-lg bg-cyan-600 text-white font-semibold transition-all';
+        btnUrl.className = 'py-2 rounded-lg bg-gray-800 text-gray-300 font-semibold transition-all';
+        groupTitle.classList.remove('hidden');
+        groupUrl.classList.add('hidden');
+      }
+      generatePreview();
+    }
+
+    function setSample(type) {
+      if (type === 'election') {
+        switchMode('url');
+        document.getElementById('input-url').value = 'https://election.topnepali.com/api/og.svg?title=Kathmandu-4&subtitle=Gagan+Kumar+Thapa+Won&badge=2079+Election';
+      } else {
+        switchMode('title');
+        document.getElementById('input-title').value = 'TopNepali Tech Portal';
+        document.getElementById('input-subtitle').value = 'Independent News, Politics & Digital Archive';
+        document.getElementById('input-badge').value = 'Verified Media';
+      }
+      generatePreview();
+    }
+
+    function generatePreview() {
+      const format = document.getElementById('select-format').value;
+      const width = document.getElementById('select-width').value;
+      let targetUrl = '';
+
+      if (activeMode === 'url') {
+        const svgUrl = document.getElementById('input-url').value.trim() || 'https://election.topnepali.com/api/og.svg?title=Kathmandu-4';
+        targetUrl = `/api?url=${encodeURIComponent(svgUrl)}&format=${format}&width=${width}`;
+      } else {
+        const title = encodeURIComponent(document.getElementById('input-title').value.trim());
+        const subtitle = encodeURIComponent(document.getElementById('input-subtitle').value.trim());
+        const badge = encodeURIComponent(document.getElementById('input-badge').value.trim());
+        targetUrl = `/api?title=${title}&subtitle=${subtitle}&badge=${badge}&format=${format}&width=${width}`;
+      }
+
+      const fullUrl = window.location.origin + targetUrl;
+      document.getElementById('output-url').value = fullUrl;
+
+      const img = document.getElementById('preview-img');
+      const spinner = document.getElementById('preview-spinner');
+      const status = document.getElementById('preview-status');
+
+      spinner.classList.remove('hidden');
+      status.innerText = 'Rendering...';
+
+      img.onload = () => {
+        spinner.classList.add('hidden');
+        status.innerText = 'Ready (200 OK)';
+      };
+      img.onerror = () => {
+        spinner.classList.add('hidden');
+        status.innerText = 'Render Failed';
+      };
+      img.src = targetUrl + '&_t=' + Date.now();
+    }
+
+    function copyUrl() {
+      const input = document.getElementById('output-url');
+      input.select();
+      navigator.clipboard.writeText(input.value);
+      alert('URL copied to clipboard!');
+    }
+
+    // Initialize on load
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('input-url').value = 'https://election.topnepali.com/api/og.svg?title=Kathmandu-4&subtitle=Gagan+Kumar+Thapa+Won&badge=2079+Election';
+      generatePreview();
+    });
+  </script>
+</body>
+</html>
