@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Primary SEO -->
+  <title>API Documentation — ImageEngine | SVG to Image API Reference</title>
+  <meta name="description" content="Complete developer documentation for the ImageEngine SVG to image API. Learn how to convert SVG to PNG, JPG, or WebP with query parameters, cURL, HTML, and JavaScript examples.">
+  <meta name="keywords" content="ImageEngine API docs, SVG to PNG API, OG image generator documentation, image conversion API reference">
+  <meta name="author" content="Grisma">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://imagengine.grisma.com.np/docs">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://imagengine.grisma.com.np/docs">
+  <meta property="og:title" content="API Documentation — ImageEngine">
+  <meta property="og:description" content="Complete developer reference for converting SVG to PNG, JPG, and WebP images at the edge. Free, no API key required.">
+  <meta property="og:image" content="https://imagengine.grisma.com.np/api?title=API+Documentation&subtitle=Complete+developer+reference+for+ImageEngine&badge=Developer+Docs&format=png&width=1200">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:site_name" content="ImageEngine">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="API Documentation — ImageEngine">
+  <meta name="twitter:description" content="Complete developer reference for converting SVG to PNG, JPG, and WebP at the edge.">
+  <meta name="twitter:image" content="https://imagengine.grisma.com.np/api?title=API+Documentation&subtitle=Complete+developer+reference+for+ImageEngine&badge=Developer+Docs&format=png&width=1200">
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background-color: #030712; color: #f3f4f6; }
+    pre { background-color: #0b0f19; border: 1px solid #1e293b; border-radius: 0.75rem; padding: 1rem; overflow-x: auto; font-family: monospace; font-size: 0.825rem; color: #38bdf8; position: relative; }
+    pre .copy-btn { position: absolute; top: 0.5rem; right: 0.5rem; padding: 0.25rem 0.5rem; border-radius: 0.375rem; background: #1e293b; color: #94a3b8; font-size: 0.7rem; cursor: pointer; border: 1px solid #334155; }
+    pre .copy-btn:hover { background: #334155; color: #e2e8f0; }
+    html { scroll-behavior: smooth; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-cyan-500 selection:text-white">
+
+  <!-- Navigation -->
+  <header class="border-b border-gray-800/80 sticky top-0 backdrop-blur-md bg-gray-950/70 z-50">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 font-black text-white text-lg">⚡</div>
+        <span class="font-extrabold text-xl tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">ImageEngine Docs</span>
+      </a>
+      <nav class="flex items-center gap-6 text-sm font-medium text-gray-400">
+        <a href="/" class="hover:text-cyan-400 transition-colors hidden sm:inline">Home & Playground</a>
+        <a href="#quickstart" class="hover:text-cyan-400 transition-colors hidden sm:inline">Quickstart</a>
+        <a href="#examples" class="hover:text-cyan-400 transition-colors hidden sm:inline">Examples</a>
+        <a href="#quota" class="hover:text-cyan-400 transition-colors hidden sm:inline">Quota</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Docs Content -->
+  <main class="flex-grow max-w-4xl mx-auto px-4 py-12">
+    <div class="mb-10 pb-6 border-b border-gray-800">
+      <h1 class="text-3xl sm:text-4xl font-black text-white mb-3">API Reference</h1>
+      <p class="text-gray-400 text-sm sm:text-base">
+        ImageEngine converts dynamic or static SVG graphics into high-resolution PNG, JPG, or WebP images at global edge speed. No API key required — just construct a URL and use it.
+      </p>
+    </div>
+
+    <!-- Base URL -->
+    <section id="quickstart" class="mb-12 space-y-4">
+      <h2 class="text-xl font-bold text-white">Base URL</h2>
+      <pre><code>https://imagengine.grisma.com.np/api</code></pre>
+      <p class="text-sm text-gray-400">All requests are served over HTTPS. Both <code class="text-cyan-400">GET</code> and <code class="text-cyan-400">POST</code> methods are supported.</p>
+    </section>
+
+    <!-- Endpoint -->
+    <section class="mb-12 space-y-4">
+      <h2 class="text-xl font-bold text-white flex items-center gap-2"><span class="px-2 py-0.5 rounded bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 text-xs font-mono">GET</span> /api</h2>
+      <p class="text-sm text-gray-400">Renders and returns an image binary directly with standard <code class="text-cyan-400">Content-Type</code> headers. Response is a raw image file — use it directly in <code class="text-cyan-400">&lt;img&gt;</code> tags, <code class="text-cyan-400">og:image</code> meta tags, or download via cURL.</p>
+      <pre><code>GET https://imagengine.grisma.com.np/api?url={ENCODED_SVG_URL}&amp;format={png|jpg|webp}&amp;width=1200</code></pre>
+    </section>
+
+    <!-- POST Endpoint -->
+    <section class="mb-12 space-y-4">
+      <h2 class="text-xl font-bold text-white flex items-center gap-2"><span class="px-2 py-0.5 rounded bg-amber-900/60 border border-amber-500/40 text-amber-300 text-xs font-mono">POST</span> /api</h2>
+      <p class="text-sm text-gray-400">Send raw SVG markup in the request body. The API will detect the SVG content and rasterize it. Useful for dynamically generated SVGs that don't have a public URL.</p>
+      <pre><code>POST https://imagengine.grisma.com.np/api?format=png&amp;width=1200
+Content-Type: text/plain
+
+&lt;svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg"&gt;
+  ...your SVG content...
+&lt;/svg&gt;</code></pre>
+    </section>
+
+    <!-- Query Parameters -->
+    <section class="mb-12">
+      <h2 class="text-xl font-bold text-white mb-4">Query Parameters</h2>
+      <div class="overflow-x-auto border border-gray-800 rounded-2xl">
+        <table class="w-full text-left text-xs sm:text-sm">
+          <thead class="bg-gray-900/80 text-gray-400 uppercase font-semibold border-b border-gray-800">
+            <tr>
+              <th class="p-3.5">Parameter</th>
+              <th class="p-3.5">Type</th>
+              <th class="p-3.5">Default</th>
+              <th class="p-3.5">Description</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-800/60 text-gray-300">
+            <tr>
+              <td class="p-3.5 font-mono text-cyan-400">url</td>
+              <td class="p-3.5 text-gray-400">string</td>
+              <td class="p-3.5 text-gray-500">—</td>
+              <td class="p-3.5">Full URL of the source SVG to fetch and rasterize. Must be URL-encoded.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-mono text-cyan-400">format</td>
+              <td class="p-3.5 text-gray-400">string</td>
+              <td class="p-3.5 font-mono text-gray-400">png</td>
+              <td class="p-3.5">Output format: <code>png</code>, <code>jpg</code> (or <code>jpeg</code>), <code>webp</code>.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-mono text-cyan-400">width</td>
+              <td class="p-3.5 text-gray-400">number</td>
+              <td class="p-3.5 font-mono text-gray-400">1200</td>
+              <td class="p-3.5">Output width in pixels (100 — 2400). Aspect ratio is strictly preserved.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-mono text-cyan-400">quality</td>
+              <td class="p-3.5 text-gray-400">number</td>
+              <td class="p-3.5 font-mono text-gray-400">85</td>
+              <td class="p-3.5">Compression quality for <code>jpg</code> and <code>webp</code> (10 — 100). Ignored for PNG.</td>
+            </tr>
+            <tr class="bg-gray-900/30">
+              <td colspan="4" class="p-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Built-in Card Generator</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-mono text-cyan-400">title</td>
+              <td class="p-3.5 text-gray-400">string</td>
+              <td class="p-3.5 text-gray-500">—</td>
+              <td class="p-3.5">Headline text for the built-in OG card generator. Triggers card mode.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-mono text-cyan-400">subtitle</td>
+              <td class="p-3.5 text-gray-400">string</td>
+              <td class="p-3.5 text-gray-500">—</td>
+              <td class="p-3.5">Secondary description text below the title.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-mono text-cyan-400">badge</td>
+              <td class="p-3.5 text-gray-400">string</td>
+              <td class="p-3.5 text-gray-500">—</td>
+              <td class="p-3.5">Small pill badge label shown above the title.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Response -->
+    <section class="mb-12 space-y-4">
+      <h2 class="text-xl font-bold text-white">Response</h2>
+      <div class="overflow-x-auto border border-gray-800 rounded-2xl">
+        <table class="w-full text-left text-xs sm:text-sm">
+          <thead class="bg-gray-900/80 text-gray-400 uppercase font-semibold border-b border-gray-800">
+            <tr>
+              <th class="p-3.5">Status</th>
+              <th class="p-3.5">Content-Type</th>
+              <th class="p-3.5">Description</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-800/60 text-gray-300">
+            <tr>
+              <td class="p-3.5"><span class="text-emerald-400 font-mono">200</span></td>
+              <td class="p-3.5 font-mono text-gray-400">image/png, image/jpeg, image/webp</td>
+              <td class="p-3.5">Raw image binary. Use directly in &lt;img&gt; or &lt;meta&gt; tags.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5"><span class="text-amber-400 font-mono">400</span></td>
+              <td class="p-3.5 font-mono text-gray-400">application/json</td>
+              <td class="p-3.5">Invalid or missing SVG payload.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5"><span class="text-amber-400 font-mono">502</span></td>
+              <td class="p-3.5 font-mono text-gray-400">application/json</td>
+              <td class="p-3.5">Failed to fetch SVG from the provided source URL.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5"><span class="text-red-400 font-mono">500</span></td>
+              <td class="p-3.5 font-mono text-gray-400">application/json</td>
+              <td class="p-3.5">Internal rendering error.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Code Examples -->
+    <section id="examples" class="mb-12 space-y-6">
+      <h2 class="text-xl font-bold text-white">Integration Examples</h2>
+
+      <div>
+        <h3 class="text-sm font-semibold text-gray-300 mb-2">1. HTML Open Graph Tag (WhatsApp, Facebook, LinkedIn)</h3>
+        <pre><code>&lt;meta property="og:image" content="https://imagengine.grisma.com.np/api?title=My+Page+Title&amp;subtitle=Description+here&amp;format=png" /&gt;
+&lt;meta property="og:image:width" content="1200" /&gt;
+&lt;meta property="og:image:height" content="630" /&gt;
+&lt;meta property="og:image:type" content="image/png" /&gt;</code></pre>
+      </div>
+
+      <div>
+        <h3 class="text-sm font-semibold text-gray-300 mb-2">2. Twitter/X Card</h3>
+        <pre><code>&lt;meta name="twitter:card" content="summary_large_image" /&gt;
+&lt;meta name="twitter:image" content="https://imagengine.grisma.com.np/api?title=My+Page&amp;format=png" /&gt;</code></pre>
+      </div>
+
+      <div>
+        <h3 class="text-sm font-semibold text-gray-300 mb-2">3. Remote SVG Conversion</h3>
+        <pre><code>&lt;meta property="og:image" content="https://imagengine.grisma.com.np/api?url=https%3A%2F%2Fyour-site.com%2Fog.svg&amp;format=png" /&gt;</code></pre>
+      </div>
+
+      <div>
+        <h3 class="text-sm font-semibold text-gray-300 mb-2">4. cURL</h3>
+        <pre><code>curl -o preview.png "https://imagengine.grisma.com.np/api?title=Hello+World&amp;format=png"</code></pre>
+      </div>
+
+      <div>
+        <h3 class="text-sm font-semibold text-gray-300 mb-2">5. JavaScript / React / Next.js / Astro</h3>
+        <pre><code>export function getOgImageUrl(title, subtitle) {
+  const base = 'https://imagengine.grisma.com.np/api';
+  const params = new URLSearchParams({ title, subtitle, format: 'png', width: '1200' });
+  return `${base}?${params.toString()}`;
+}
+
+// Usage in &lt;head&gt;:
+// &lt;meta property="og:image" content={getOgImageUrl('My Page', 'Page description')} /&gt;</code></pre>
+      </div>
+
+      <div>
+        <h3 class="text-sm font-semibold text-gray-300 mb-2">6. POST Raw SVG (cURL)</h3>
+        <pre><code>curl -X POST -d '&lt;svg width="1200" height="630"&gt;...&lt;/svg&gt;' \
+  "https://imagengine.grisma.com.np/api?format=webp&amp;width=800" \
+  -o output.webp</code></pre>
+      </div>
+    </section>
+
+    <!-- Quota Section -->
+    <section id="quota" class="mb-12">
+      <h2 class="text-xl font-bold text-white mb-4">Free Tier Quota & Limits</h2>
+      <div class="overflow-x-auto border border-gray-800 rounded-2xl">
+        <table class="w-full text-left text-xs sm:text-sm">
+          <thead class="bg-gray-900/80 text-gray-400 uppercase font-semibold border-b border-gray-800">
+            <tr>
+              <th class="p-3.5">Limit</th>
+              <th class="p-3.5">Value</th>
+              <th class="p-3.5">Notes</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-800/60 text-gray-300">
+            <tr>
+              <td class="p-3.5 font-semibold">Monthly Renders</td>
+              <td class="p-3.5 text-cyan-400 font-mono">500,000</td>
+              <td class="p-3.5 text-gray-400">Cold (uncached) image generations per calendar month.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-semibold">Bandwidth</td>
+              <td class="p-3.5 text-cyan-400 font-mono">100 GB / month</td>
+              <td class="p-3.5 text-gray-400">Outbound image data transfer. Cached hits are very lightweight.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-semibold">Max Width</td>
+              <td class="p-3.5 text-cyan-400 font-mono">2,400 px</td>
+              <td class="p-3.5 text-gray-400">Maximum output width. Aspect ratio is preserved.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-semibold">Min Width</td>
+              <td class="p-3.5 text-cyan-400 font-mono">100 px</td>
+              <td class="p-3.5 text-gray-400">Minimum output width.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-semibold">Edge Cache TTL</td>
+              <td class="p-3.5 text-cyan-400 font-mono">1 year</td>
+              <td class="p-3.5 text-gray-400">Cached globally across 300+ edge locations. Cached hits don't count against quota.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-semibold">Formats</td>
+              <td class="p-3.5 text-cyan-400 font-mono">PNG, JPG, WebP</td>
+              <td class="p-3.5 text-gray-400">Controlled via <code>?format=</code> query parameter.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-semibold">Rate Limiting</td>
+              <td class="p-3.5 text-cyan-400 font-mono">Fair use</td>
+              <td class="p-3.5 text-gray-400">No hard per-second limit, but abusive patterns may be throttled.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-gray-500 mt-3">Cached image requests are served from the edge and do <strong class="text-gray-400">not</strong> count against the monthly render quota. Most production workloads stay well under limits.</p>
+    </section>
+
+    <!-- Caching Specs -->
+    <section class="mb-12 p-6 rounded-2xl bg-gray-900/50 border border-gray-800 space-y-2">
+      <h2 class="text-base font-bold text-white">Multi-Tier Edge CDN Caching</h2>
+      <p class="text-xs sm:text-sm text-gray-400">
+        Every response dispatches full RFC-standard and platform-specific edge caching headers:
+      </p>
+      <pre><code>Cache-Control: public, max-age=31536000, s-maxage=31536000, stale-while-revalidate=604800, stale-if-error=86400
+CDN-Cache-Control: public, max-age=31536000, stale-while-revalidate=604800
+Vercel-CDN-Cache-Control: public, max-age=31536000, stale-while-revalidate=604800
+Cloudflare-CDN-Cache-Control: public, max-age=31536000, stale-while-revalidate=604800
+ETag: "..."</code></pre>
+      <p class="text-xs text-gray-400 mt-2">
+        Images are cached globally for up to 1 year. Conditional GET requests with <code>If-None-Match</code> automatically return <code>304 Not Modified</code> with zero payload bandwidth.
+      </p>
+    </section>
+
+    <!-- CORS -->
+    <section class="mb-12 p-6 rounded-2xl bg-gray-900/50 border border-gray-800 space-y-2">
+      <h2 class="text-base font-bold text-white">CORS Policy</h2>
+      <p class="text-xs sm:text-sm text-gray-400">
+        The API sends <code class="text-cyan-400">Access-Control-Allow-Origin: *</code> on all responses. You can call the API from any domain, browser application, or serverless worker without cross-origin blocks.
+      </p>
+    </section>
+
+    <!-- WAF & Bot Protection Whitelist -->
+    <section class="mb-12 p-6 rounded-2xl bg-gray-900/50 border border-gray-800 space-y-4">
+      <h2 class="text-base font-bold text-white flex items-center gap-2">
+        <span>🛡️</span> Firewall & Cloudflare WAF Whitelisting
+      </h2>
+      <p class="text-xs sm:text-sm text-gray-400">
+        When using <code class="text-cyan-400">?url=https://...</code>, ImageEngine makes an upstream HTTP request to fetch your SVG. If your origin domain is protected by Cloudflare Bot Fight Mode, AWS WAF, or strict rate limits, the request may be flagged as automated traffic and blocked with a <code>403 Forbidden</code> or challenge page.
+      </p>
+
+      <div class="space-y-2">
+        <h3 class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Outgoing User-Agent:</h3>
+        <pre><code>User-Agent: ImageEngine/1.0 (+https://imagengine.grisma.com.np)</code></pre>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Cloudflare WAF Skip Rule Configuration:</h3>
+        <p class="text-xs text-gray-400">
+          To ensure reliable image generation, add a custom rule in your Cloudflare dashboard (<strong>Security</strong> &rarr; <strong>WAF</strong> &rarr; <strong>Custom rules</strong>):
+        </p>
+        <div class="p-4 bg-gray-950 rounded-xl border border-gray-800 font-mono text-xs text-emerald-400 space-y-1">
+          <div><span class="text-gray-500">Rule Name:</span> Allow ImageEngine SVG Fetcher</div>
+          <div><span class="text-gray-500">Field:</span> User Agent</div>
+          <div><span class="text-gray-500">Operator:</span> contains</div>
+          <div><span class="text-gray-500">Value:</span> ImageEngine</div>
+          <div class="pt-1"><span class="text-gray-500">Action:</span> <span class="text-cyan-400 font-bold">Skip</span> &rarr; WAF Managed Rules, Bot Fight Mode, Rate Limiting</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-900 bg-gray-950 py-10 text-xs text-gray-500">
+    <div class="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div>© 2026 ImageEngine — Built by <a href="https://grisma.com.np" class="text-gray-300 hover:text-white font-medium">Grisma</a>.</div>
+      <div class="flex items-center gap-6">
+        <a href="/" class="hover:text-gray-300">Home</a>
+        <a href="/privacy" class="hover:text-gray-300">Privacy Policy</a>
+        <a href="/terms" class="hover:text-gray-300">Terms of Service</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

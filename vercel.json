@@ -1,5 +1,7 @@
 {
   "version": 2,
+  "cleanUrls": true,
+  "trailingSlash": false,
   "functions": {
     "api/index.js": {
       "memory": 1024,
@@ -7,10 +9,9 @@
     }
   },
   "rewrites": [
-    { "source": "/", "destination": "/public/index.html" },
-    { "source": "/docs", "destination": "/public/docs.html" },
-    { "source": "/privacy", "destination": "/public/privacy.html" },
-    { "source": "/terms", "destination": "/public/terms.html" },
+    { "source": "/docs", "destination": "/docs.html" },
+    { "source": "/privacy", "destination": "/privacy.html" },
+    { "source": "/terms", "destination": "/terms.html" },
     { "source": "/api", "destination": "/api/index.js" },
     { "source": "/api/(.*)", "destination": "/api/index.js" }
   ],
