@@ -3,14 +3,65 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ImageEngine — Free Universal SVG to Image Edge API</title>
-  <meta name="description" content="Free, open-source high performance SVG to PNG, JPG, and WebP rasterizer API running on global edge network with automatic CDN caching.">
+
+  <!-- Primary SEO -->
+  <title>ImageEngine — Free SVG to Image API | PNG, JPG, WebP Converter</title>
+  <meta name="description" content="Free, high-performance SVG to PNG, JPG, and WebP image API with global edge caching. Generate Open Graph social cards, dynamic badges, and raster images from any SVG in milliseconds.">
+  <meta name="keywords" content="SVG to PNG, SVG to JPG, SVG to WebP, OG image generator, Open Graph image API, social card generator, free image API, SVG rasterizer, edge image API">
+  <meta name="author" content="Grisma">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://imagengine.grisma.com.np/">
+
+  <!-- Open Graph / Facebook / WhatsApp -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://imagengine.grisma.com.np/">
+  <meta property="og:title" content="ImageEngine — Free SVG to Image API">
+  <meta property="og:description" content="Convert any SVG to high-resolution PNG, JPG, or WebP at the edge. Built for Open Graph social previews, WhatsApp cards, dynamic badges, and automated pipelines.">
+  <meta property="og:image" content="https://imagengine.grisma.com.np/api?title=ImageEngine&subtitle=Free+SVG+to+Image+Edge+API&badge=Open+Graph+Ready&format=png&width=1200">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:site_name" content="ImageEngine">
+  <meta property="og:locale" content="en_US">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ImageEngine — Free SVG to Image API">
+  <meta name="twitter:description" content="Convert any SVG to high-resolution PNG, JPG, or WebP at the edge. Built for social previews, WhatsApp cards, and dynamic badges.">
+  <meta name="twitter:image" content="https://imagengine.grisma.com.np/api?title=ImageEngine&subtitle=Free+SVG+to+Image+Edge+API&badge=Open+Graph+Ready&format=png&width=1200">
+
+  <!-- Favicon -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "ImageEngine",
+    "url": "https://imagengine.grisma.com.np",
+    "description": "Free, high-performance SVG to PNG, JPG, and WebP image conversion API with global edge caching.",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Any",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "author": {
+      "@type": "Person",
+      "name": "Grisma",
+      "url": "https://grisma.com.np"
+    }
+  }
+  </script>
+
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { background-color: #030712; color: #f3f4f6; }
     .glow-cyan { text-shadow: 0 0 25px rgba(56, 189, 248, 0.4); }
     .glow-box { box-shadow: 0 0 50px -10px rgba(56, 189, 248, 0.15); }
+    html { scroll-behavior: smooth; }
   </style>
 </head>
 <body class="min-h-screen flex flex-col antialiased selection:bg-cyan-500 selection:text-white">
@@ -22,11 +73,29 @@
         <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 font-black text-white text-lg">⚡</div>
         <span class="font-extrabold text-xl tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">ImageEngine</span>
       </a>
-      <nav class="flex items-center gap-6 text-sm font-medium text-gray-400">
+
+      <!-- Mobile Menu Button -->
+      <button id="mobile-menu-btn" class="sm:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors" onclick="document.getElementById('mobile-nav').classList.toggle('hidden')">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+
+      <nav class="hidden sm:flex items-center gap-6 text-sm font-medium text-gray-400">
         <a href="#playground" class="hover:text-cyan-400 transition-colors">Playground</a>
+        <a href="#features" class="hover:text-cyan-400 transition-colors">Features</a>
+        <a href="#quota" class="hover:text-cyan-400 transition-colors">Quota</a>
         <a href="/docs" class="hover:text-cyan-400 transition-colors">Docs & API</a>
-        <a href="https://github.com/iamgrisma" target="_blank" class="px-3.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold transition-colors border border-gray-700/60">GitHub</a>
+        <a href="https://grisma.com.np" target="_blank" class="px-3.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold transition-colors border border-gray-700/60">By Grisma</a>
       </nav>
+    </div>
+
+    <!-- Mobile Nav -->
+    <div id="mobile-nav" class="hidden sm:hidden border-t border-gray-800 bg-gray-950/95 backdrop-blur-md px-4 py-4 space-y-3">
+      <a href="#playground" class="block text-sm text-gray-400 hover:text-cyan-400">Playground</a>
+      <a href="#features" class="block text-sm text-gray-400 hover:text-cyan-400">Features</a>
+      <a href="#quota" class="block text-sm text-gray-400 hover:text-cyan-400">Quota</a>
+      <a href="/docs" class="block text-sm text-gray-400 hover:text-cyan-400">Docs & API</a>
+      <a href="/privacy" class="block text-sm text-gray-400 hover:text-cyan-400">Privacy</a>
+      <a href="/terms" class="block text-sm text-gray-400 hover:text-cyan-400">Terms</a>
     </div>
   </header>
 
@@ -35,7 +104,7 @@
     <section class="max-w-4xl mx-auto px-4 pt-20 pb-12 text-center">
       <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-xs font-semibold mb-6">
         <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-        100% Free Edge Microservice & CDN
+        100% Free — No API Key Required
       </div>
       <h1 class="text-4xl sm:text-6xl font-black tracking-tight leading-tight mb-6">
         Convert Any <span class="bg-gradient-to-r from-cyan-400 via-sky-300 to-indigo-400 bg-clip-text text-transparent">SVG to Raster</span> at the Edge.
@@ -53,13 +122,13 @@
     <!-- Interactive Live Playground -->
     <section id="playground" class="max-w-5xl mx-auto px-4 py-12">
       <div class="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 sm:p-8 glow-box">
-        <div class="flex items-center justify-between mb-6 pb-4 border-b border-gray-800">
+        <div class="flex items-center justify-between mb-6 pb-4 border-b border-gray-800 flex-wrap gap-3">
           <div>
             <h2 class="text-xl font-bold text-white flex items-center gap-2"><span>🧪</span> Live API Playground</h2>
             <p class="text-xs text-gray-400">Test any SVG URL and view live rendered output with instant CDN preview.</p>
           </div>
           <div class="flex gap-2">
-            <button onclick="setSample('election')" class="text-xs px-2.5 py-1 rounded-md bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors">Sample Election</button>
+            <button onclick="setSample('og')" class="text-xs px-2.5 py-1 rounded-md bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors">Sample OG Card</button>
             <button onclick="setSample('custom')" class="text-xs px-2.5 py-1 rounded-md bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors">Custom Title</button>
           </div>
         </div>
@@ -78,22 +147,22 @@
             <!-- URL Input -->
             <div id="group-url">
               <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">SVG URL</label>
-              <input type="url" id="input-url" placeholder="https://election.topnepali.com/api/og.svg?title=Kathmandu-4" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-cyan-500 font-mono">
+              <input type="url" id="input-url" placeholder="https://your-site.com/logo.svg" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-cyan-500 font-mono">
             </div>
 
             <!-- Title & Subtitle Input -->
             <div id="group-title" class="space-y-3 hidden">
               <div>
                 <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Headline Title</label>
-                <input type="text" id="input-title" value="Kathmandu Constituency 4" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500">
+                <input type="text" id="input-title" value="My Awesome Project" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500">
               </div>
               <div>
                 <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Subtitle</label>
-                <input type="text" id="input-subtitle" value="Gagan Kumar Thapa (Nepali Congress) — 21,302 Votes" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500">
+                <input type="text" id="input-subtitle" value="Generate beautiful social cards in milliseconds" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500">
               </div>
               <div>
                 <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Badge</label>
-                <input type="text" id="input-badge" value="2079 House of Representatives" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500">
+                <input type="text" id="input-badge" value="Open Graph Ready" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500">
               </div>
             </div>
 
@@ -102,15 +171,15 @@
               <div>
                 <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Format</label>
                 <select id="select-format" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500">
-                  <option value="png" selected>PNG (Lossless, Crisp)</option>
-                  <option value="jpg">JPG (Smaller KB)</option>
+                  <option value="png" selected>PNG (Lossless)</option>
+                  <option value="jpg">JPG (Smaller)</option>
                   <option value="webp">WebP (Modern)</option>
                 </select>
               </div>
               <div>
                 <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Target Width</label>
                 <select id="select-width" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500">
-                  <option value="1200" selected>1200px (Standard OG)</option>
+                  <option value="1200" selected>1200px (OG Standard)</option>
                   <option value="800">800px (Medium)</option>
                   <option value="600">600px (Thumbnail)</option>
                 </select>
@@ -130,7 +199,7 @@
                 <span id="preview-status" class="text-cyan-400 font-mono">Ready</span>
               </div>
               <div class="w-full aspect-[1200/630] rounded-2xl bg-gray-950 border border-gray-800 overflow-hidden flex items-center justify-center relative group">
-                <img id="preview-img" src="/api?title=ImageEngine+Preview&subtitle=Universal+SVG+to+Image+Edge+API&badge=Online" alt="Live Preview" class="w-full h-full object-contain">
+                <img id="preview-img" src="/api?title=ImageEngine+Preview&subtitle=Try+the+playground+—+generate+OG+images+instantly&badge=Live+Demo" alt="ImageEngine Live Preview — SVG to PNG converter" class="w-full h-full object-contain">
                 <div id="preview-spinner" class="absolute inset-0 bg-gray-950/80 backdrop-blur-sm flex items-center justify-center hidden">
                   <div class="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
                 </div>
@@ -152,22 +221,98 @@
     </section>
 
     <!-- Feature Grid -->
-    <section class="max-w-5xl mx-auto px-4 py-16">
+    <section id="features" class="max-w-5xl mx-auto px-4 py-16">
+      <div class="text-center mb-10">
+        <h2 class="text-2xl sm:text-3xl font-black text-white mb-3">Why ImageEngine?</h2>
+        <p class="text-gray-400 text-sm sm:text-base max-w-xl mx-auto">Purpose-built for developers who need fast, reliable image generation without complex infrastructure.</p>
+      </div>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="p-6 rounded-2xl bg-gray-900/40 border border-gray-800/80">
           <div class="text-2xl mb-3">⚡</div>
-          <h3 class="font-bold text-white mb-2">Rust-Powered Core</h3>
-          <p class="text-sm text-gray-400">Uses native Resvg engine to rasterize SVGs in 8–15ms with full CSS gradients and filter support.</p>
+          <h3 class="font-bold text-white mb-2">Sub-20ms Rendering</h3>
+          <p class="text-sm text-gray-400">Native-compiled rendering core rasterizes SVGs with full CSS gradients, filters, and path support in under 20 milliseconds.</p>
         </div>
         <div class="p-6 rounded-2xl bg-gray-900/40 border border-gray-800/80">
           <div class="text-2xl mb-3">🌍</div>
-          <h3 class="font-bold text-white mb-2">1-Year Global Edge Cache</h3>
-          <p class="text-sm text-gray-400">Images are cached across 300+ edge datacenters worldwide with <code>s-maxage=31536000</code> for 10ms repeat hits.</p>
+          <h3 class="font-bold text-white mb-2">Global Edge CDN Cache</h3>
+          <p class="text-sm text-gray-400">Images are cached across 300+ edge locations worldwide. Repeat requests resolve in under 15ms with 1-year cache TTL.</p>
         </div>
         <div class="p-6 rounded-2xl bg-gray-900/40 border border-gray-800/80">
           <div class="text-2xl mb-3">📱</div>
           <h3 class="font-bold text-white mb-2">WhatsApp & Social Ready</h3>
-          <p class="text-sm text-gray-400">Generates clean pixel formats (PNG & JPG) so scrapers on WhatsApp, Facebook, and Twitter show full cards.</p>
+          <p class="text-sm text-gray-400">Outputs clean pixel formats (PNG & JPG) so scrapers on WhatsApp, Facebook, Twitter/X, and LinkedIn show full-resolution preview cards.</p>
+        </div>
+        <div class="p-6 rounded-2xl bg-gray-900/40 border border-gray-800/80">
+          <div class="text-2xl mb-3">🔓</div>
+          <h3 class="font-bold text-white mb-2">No API Key Required</h3>
+          <p class="text-sm text-gray-400">Completely open access. Just construct a URL and use it — no signups, no tokens, no billing. Free forever for fair use.</p>
+        </div>
+        <div class="p-6 rounded-2xl bg-gray-900/40 border border-gray-800/80">
+          <div class="text-2xl mb-3">🎨</div>
+          <h3 class="font-bold text-white mb-2">Built-in Card Generator</h3>
+          <p class="text-sm text-gray-400">Pass <code class="text-cyan-400">?title=</code> and <code class="text-cyan-400">?subtitle=</code> to instantly generate branded social cards without designing any SVG.</p>
+        </div>
+        <div class="p-6 rounded-2xl bg-gray-900/40 border border-gray-800/80">
+          <div class="text-2xl mb-3">🔒</div>
+          <h3 class="font-bold text-white mb-2">Privacy-First</h3>
+          <p class="text-sm text-gray-400">Zero cookies, zero tracking, zero storage. SVGs are processed in volatile memory only — nothing is ever persisted or logged.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quota Section -->
+    <section id="quota" class="max-w-4xl mx-auto px-4 py-16">
+      <div class="text-center mb-10">
+        <h2 class="text-2xl sm:text-3xl font-black text-white mb-3">Free Tier Quota</h2>
+        <p class="text-gray-400 text-sm sm:text-base max-w-xl mx-auto">ImageEngine is free for everyone under fair use. Here's what the free tier includes.</p>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="p-5 rounded-2xl bg-gray-900/50 border border-gray-800 text-center">
+          <div class="text-3xl font-black text-cyan-400 mb-1">500K</div>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Renders / Month</div>
+          <p class="text-xs text-gray-500 mt-2">Up to 500,000 image generations per calendar month.</p>
+        </div>
+        <div class="p-5 rounded-2xl bg-gray-900/50 border border-gray-800 text-center">
+          <div class="text-3xl font-black text-cyan-400 mb-1">100 GB</div>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Bandwidth / Month</div>
+          <p class="text-xs text-gray-500 mt-2">100 GB of outbound image data transfer included.</p>
+        </div>
+        <div class="p-5 rounded-2xl bg-gray-900/50 border border-gray-800 text-center">
+          <div class="text-3xl font-black text-cyan-400 mb-1">2400px</div>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Max Width</div>
+          <p class="text-xs text-gray-500 mt-2">Maximum output width per image. Aspect ratio preserved.</p>
+        </div>
+        <div class="p-5 rounded-2xl bg-gray-900/50 border border-gray-800 text-center">
+          <div class="text-3xl font-black text-cyan-400 mb-1">1 Year</div>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Edge Cache TTL</div>
+          <p class="text-xs text-gray-500 mt-2">Once rendered, images are cached globally for up to 1 full year.</p>
+        </div>
+      </div>
+      <div class="mt-6 p-4 rounded-xl bg-gray-900/30 border border-gray-800/60 text-center">
+        <p class="text-xs text-gray-500">Cached image requests do <strong class="text-gray-400">not</strong> count against your monthly render quota. Only cold (first-time) renders are counted. Most production workloads stay well under quota thanks to aggressive edge caching.</p>
+      </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="max-w-4xl mx-auto px-4 py-16">
+      <div class="text-center mb-10">
+        <h2 class="text-2xl sm:text-3xl font-black text-white mb-3">How It Works</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div class="text-center">
+          <div class="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white font-black text-xl mb-4">1</div>
+          <h3 class="font-bold text-white mb-2">Send Your SVG</h3>
+          <p class="text-sm text-gray-400">Pass an SVG URL via <code class="text-cyan-400">?url=</code>, or use the built-in title generator with <code class="text-cyan-400">?title=</code>.</p>
+        </div>
+        <div class="text-center">
+          <div class="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white font-black text-xl mb-4">2</div>
+          <h3 class="font-bold text-white mb-2">Edge Renders It</h3>
+          <p class="text-sm text-gray-400">The API rasterizes your SVG into a high-resolution PNG, JPG, or WebP image in under 20ms.</p>
+        </div>
+        <div class="text-center">
+          <div class="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white font-black text-xl mb-4">3</div>
+          <h3 class="font-bold text-white mb-2">Cached Globally</h3>
+          <p class="text-sm text-gray-400">The rendered image is cached at 300+ edge locations. Every subsequent request loads in under 15ms.</p>
         </div>
       </div>
     </section>
@@ -177,7 +322,7 @@
   <footer class="border-t border-gray-900 bg-gray-950 py-10 text-xs text-gray-500">
     <div class="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div>
-        © 2026 ImageEngine — Built by <a href="https://grisma.com.np" class="text-gray-300 hover:text-white font-medium">Grisma</a>. Free & Open for Developers.
+        © 2026 ImageEngine — Built by <a href="https://grisma.com.np" class="text-gray-300 hover:text-white font-medium">Grisma</a>. Free for developers.
       </div>
       <div class="flex items-center gap-6">
         <a href="/docs" class="hover:text-gray-300">Docs</a>
@@ -212,14 +357,16 @@
     }
 
     function setSample(type) {
-      if (type === 'election') {
-        switchMode('url');
-        document.getElementById('input-url').value = 'https://election.topnepali.com/api/og.svg?title=Kathmandu-4&subtitle=Gagan+Kumar+Thapa+Won&badge=2079+Election';
+      if (type === 'og') {
+        switchMode('title');
+        document.getElementById('input-title').value = 'My Awesome App';
+        document.getElementById('input-subtitle').value = 'Beautiful social cards generated in milliseconds';
+        document.getElementById('input-badge').value = 'Open Graph Ready';
       } else {
         switchMode('title');
-        document.getElementById('input-title').value = 'TopNepali Tech Portal';
-        document.getElementById('input-subtitle').value = 'Independent News, Politics & Digital Archive';
-        document.getElementById('input-badge').value = 'Verified Media';
+        document.getElementById('input-title').value = 'ImageEngine Demo';
+        document.getElementById('input-subtitle').value = 'Convert any SVG to PNG, JPG, or WebP at the edge';
+        document.getElementById('input-badge').value = 'Edge Rendered';
       }
       generatePreview();
     }
@@ -230,10 +377,14 @@
       let targetUrl = '';
 
       if (activeMode === 'url') {
-        const svgUrl = document.getElementById('input-url').value.trim() || 'https://election.topnepali.com/api/og.svg?title=Kathmandu-4';
-        targetUrl = `/api?url=${encodeURIComponent(svgUrl)}&format=${format}&width=${width}`;
+        const svgUrl = document.getElementById('input-url').value.trim();
+        if (!svgUrl) {
+          targetUrl = `/api?title=Paste+an+SVG+URL&subtitle=Then+click+Render+Image+Now&badge=Playground&format=${format}&width=${width}`;
+        } else {
+          targetUrl = `/api?url=${encodeURIComponent(svgUrl)}&format=${format}&width=${width}`;
+        }
       } else {
-        const title = encodeURIComponent(document.getElementById('input-title').value.trim());
+        const title = encodeURIComponent(document.getElementById('input-title').value.trim() || 'ImageEngine');
         const subtitle = encodeURIComponent(document.getElementById('input-subtitle').value.trim());
         const badge = encodeURIComponent(document.getElementById('input-badge').value.trim());
         targetUrl = `/api?title=${title}&subtitle=${subtitle}&badge=${badge}&format=${format}&width=${width}`;
@@ -264,12 +415,14 @@
       const input = document.getElementById('output-url');
       input.select();
       navigator.clipboard.writeText(input.value);
-      alert('URL copied to clipboard!');
+      const btn = event.target;
+      const original = btn.innerText;
+      btn.innerText = 'Copied!';
+      setTimeout(() => btn.innerText = original, 1500);
     }
 
     // Initialize on load
     window.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('input-url').value = 'https://election.topnepali.com/api/og.svg?title=Kathmandu-4&subtitle=Gagan+Kumar+Thapa+Won&badge=2079+Election';
       generatePreview();
     });
   </script>
