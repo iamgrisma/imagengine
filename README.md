@@ -80,6 +80,15 @@ If routing your domain (`imagengine.grisma.com.np`) through Cloudflare's orange-
    - **Browser TTL:** `Respect origin`
 3. Because ImageEngine emits `Cloudflare-CDN-Cache-Control: max-age=31536000`, Cloudflare will cache cold outputs at the nearest edge data center.
 
+### Cloudflare WAF Rule on Upstream SVG Origins
+
+If your source SVG host (e.g. `election.topnepali.com`) is protected by Cloudflare Bot Fight Mode or strict WAF managed rules, it might challenge or block automated SVG fetch calls from serverless edge runtimes:
+
+- **Outgoing User-Agent:** `ImageEngine/1.0 (+https://imagengine.grisma.com.np)`
+- **Recommended Cloudflare WAF Custom Rule:**
+  - **Rule:** `(http.user_agent contains "ImageEngine")`
+  - **Action:** **Skip** &rarr; *WAF Managed Rules, Bot Fight Mode, Rate Limiting*
+
 ---
 
 ## Free Developer Quota & Fair Use
