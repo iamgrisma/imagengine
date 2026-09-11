@@ -234,8 +234,8 @@
                   <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider">Remote SVG URL</label>
                   <button onclick="fillSampleUrl()" class="text-xs text-cyan-400 hover:underline">Insert Sample SVG</button>
                 </div>
-                <input type="url" id="url-input" placeholder="https://raw.githubusercontent.com/.../badge.svg" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-cyan-500 transition-colors">
-                <p class="text-[11px] text-gray-500 mt-1">Must be publicly reachable over HTTPS. Upstream WAFs should allow User-Agent: <code>ImageEngine/1.0</code>.</p>
+                <input type="url" id="url-input" placeholder="https://election.topnepali.com/api/og.svg?title=Kathmandu" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-cyan-500 transition-colors">
+                <p class="text-[11px] text-gray-500 mt-1">Must be HTTPS from authorized domains (*.topnepali.com, *.grisma.com.np, *.grisma.info.np).</p>
               </div>
             </div>
 
@@ -437,7 +437,7 @@
     }
 
     function fillSampleUrl() {
-      document.getElementById('url-input').value = 'https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/javascript/javascript.png';
+      document.getElementById('url-input').value = 'https://election.topnepali.com/api/og.svg?title=Kathmandu%20Constituency%204';
       renderLiveImage();
     }
 

@@ -62,40 +62,70 @@ async function getRequestBody(req) {
   });
 }
 
-async function resolveUpstreamSvgUrl(sourceUrl) {
-  if (!sourceUrl) return '';
-  let url = sourceUrl.trim();
+// Strict Allowlist of Authorized Root Domains (includes all subdomains)
+const ALLOWED_ROOT_DOMAINS = [
+  'topnepali.com',
+  'grisma.com.np',
+  'grisma.info.np'
+];
 
-  // 1. GitHub blob URL -> raw content URL
-  if (url.includes('github.com/') && url.includes('/blob/')) {
-    url = url.replace('github.com/', 'raw.githubusercontent.com/').replace('/blob/', '/');
+/**
+ * Validates whether an upstream SVG URL is permitted.
+ * Strictly enforces HTTPS protocol, standard port, and allowed domain/subdomain whitelist.
+ */
+function isAllowedUpstreamUrl(urlStr) {
+  if (!urlStr || typeof urlStr !== 'string') return false;
+  try {
+    const parsed = new URL(urlStr.trim());
+    if (parsed.protocol !== 'https:') return false;
+    if (parsed.port && parsed.port !== '443') return false;
+    const host = parsed.hostname.toLowerCase();
+    return ALLOWED_ROOT_DOMAINS.some(root => host === root || host.endsWith('.' + root));
+  } catch {
+    return false;
   }
+}
 
-  // 2. Wikipedia / Wikimedia page resolution (supports article media URLs & direct File: URLs)
-  if (url.includes('wikipedia.org') || url.includes('wikimedia.org') || url.startsWith('File:')) {
-    const fileMatch = url.match(/File:([^#&?]+)/i);
-    if (fileMatch) {
-      const fileName = decodeURIComponent(fileMatch[0]);
-      try {
-        const apiUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(fileName)}&prop=imageinfo&iiprop=url&format=json`;
-        const r = await fetch(apiUrl, {
-          headers: { 'User-Agent': 'ImageEngine/1.0 (+https://imagengine.grisma.info.np)' }
-        });
-        const data = await r.json();
-        const pages = data.query?.pages;
-        if (pages) {
-          for (const k in pages) {
-            const info = pages[k]?.imageinfo;
-            if (info && info[0]?.url) {
-              return info[0].url;
-            }
-          }
-        }
-      } catch {}
+/**
+ * Fetches an upstream SVG while strictly checking each redirect hop against the domain allowlist.
+ */
+async function fetchAllowedSvg(sourceUrl, signal) {
+  let currentUrl = sourceUrl;
+  let redirects = 0;
+  const maxRedirects = 3;
+
+  while (redirects <= maxRedirects) {
+    if (!isAllowedUpstreamUrl(currentUrl)) {
+      return {
+        ok: false,
+        status: 403,
+        error: 'Forbidden: Upstream domain not permitted. Only authorized domains (*.topnepali.com, *.grisma.com.np, *.grisma.info.np) are allowed.'
+      };
     }
+
+    const res = await fetch(currentUrl, {
+      signal,
+      redirect: 'manual',
+      headers: {
+        'User-Agent': 'ImageEngine/1.0 (+https://imagengine.grisma.info.np)',
+        'Accept': 'image/svg+xml,application/xml,text/xml,*/*',
+      },
+    });
+
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get('location');
+      if (!location) {
+        return { ok: false, status: res.status, error: 'Upstream redirect missing Location header' };
+      }
+      currentUrl = new URL(location, currentUrl).href;
+      redirects++;
+      continue;
+    }
+
+    return { ok: true, status: res.status, response: res };
   }
 
-  return url;
+  return { ok: false, status: 508, error: 'Too many redirects from upstream server' };
 }
 
 const MAX_SVG_SIZE_BYTES = 512 * 1024; // 512 KB payload guard
@@ -291,7 +321,8 @@ export default async function handler(req, res) {
     const { fontFiles } = loadFonts();
     return res.status(200).json({
       status: 'ok',
-      version: '2.5.0',
+      version: '2.6.0',
+      allowedDomains: ALLOWED_ROOT_DOMAINS,
       timestamp: new Date().toISOString(),
       cwd: process.cwd(),
       __dirname,
@@ -362,11 +393,8 @@ export default async function handler(req, res) {
       targetUrl = rawTarget;
     }
 
-    // Special folder shortcuts: e.g. /wiki/Nepalese_Election_Symbol_Tree.png
-    if (!targetUrl && folder === 'wiki' && slug) {
-      const wikiFile = 'File:' + slug.replace(/\.svg$/i, '') + '.svg';
-      targetUrl = await resolveUpstreamSvgUrl(wikiFile);
-    } else if (!targetUrl && folder === 'election' && slug) {
+    // Special folder shortcuts: e.g. /election/manish-jha.png
+    if (!targetUrl && folder === 'election' && slug) {
       targetUrl = `https://election.topnepali.com/api/og.svg?title=${encodeURIComponent(slug)}`;
     }
 
@@ -379,39 +407,43 @@ export default async function handler(req, res) {
         } catch {}
       }
 
-      // Automatically resolve Wikipedia / Wikimedia / GitHub URLs to direct raw SVG URL
-      sourceUrl = await resolveUpstreamSvgUrl(sourceUrl);
-
-      if (!sourceUrl.startsWith('http://') && !sourceUrl.startsWith('https://')) {
-        return res.status(400).json({ error: 'Invalid URL scheme. Only HTTP and HTTPS are permitted.' });
+      // Security Guard: Strictly reject any upstream URL not in the allowed domains
+      if (!isAllowedUpstreamUrl(sourceUrl)) {
+        return res.status(403).json({
+          error: 'Forbidden: Upstream domain not permitted. Only authorized domains (*.topnepali.com, *.grisma.com.np, *.grisma.info.np) are allowed.'
+        });
       }
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-      let upstream;
+      let fetchResult;
       try {
-        upstream = await fetch(sourceUrl, {
-          signal: controller.signal,
-          headers: {
-            'User-Agent': 'ImageEngine/1.0 (+https://imagengine.grisma.info.np)',
-            'Accept': 'image/svg+xml,application/xml,text/xml,*/*',
-          },
-        });
+        fetchResult = await fetchAllowedSvg(sourceUrl, controller.signal);
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          return res.status(504).json({ error: 'Gateway Timeout fetching upstream SVG' });
+        }
+        return res.status(502).json({ error: `Upstream fetch failed: ${err.message}` });
       } finally {
         clearTimeout(timeout);
       }
 
-      if (!upstream.ok) {
-        // Graceful fallback to dynamic card if title or slug is available
+      if (!fetchResult.ok) {
+        if (fetchResult.status === 403) {
+          return res.status(403).json({ error: fetchResult.error });
+        }
+        // Graceful fallback to dynamic card if title or slug is available and error is 404/5xx
         if (query.title || slug) {
           const fallbackTitle = query.title || slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
           svgContent = buildDefaultSvg(fallbackTitle, query.subtitle, query.badge, query.theme);
         } else {
-          return res.status(502).json({ error: `Upstream error fetching SVG (Status ${upstream.status})` });
+          return res.status(fetchResult.status || 502).json({
+            error: fetchResult.error || `Upstream error fetching SVG (Status ${fetchResult.status})`
+          });
         }
       } else {
-        svgContent = await upstream.text();
+        svgContent = await fetchResult.response.text();
       }
     }
     // 2. Direct POST Raw SVG Body
@@ -535,7 +567,7 @@ export default async function handler(req, res) {
     res.setHeader('Surrogate-Control', 'max-age=31536000');
     res.setHeader('Vary', 'Accept-Encoding');
     res.setHeader('X-Engine-Fonts', String(fontFiles ? fontFiles.length : 0));
-    res.setHeader('X-Engine-Version', '2.5.0');
+    res.setHeader('X-Engine-Version', '2.6.0');
 
     // Set Content-Disposition header with clean file name
     let downloadName = 'image';

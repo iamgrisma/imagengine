@@ -45,7 +45,7 @@ POST https://imagengine.grisma.com.np/api?format={png|jpg|webp}&width=1200
 
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `url` | `string` | — | Full, URL-encoded path to the source SVG file. |
+| `url` | `string` | — | Full, URL-encoded HTTPS path to the source SVG file. Restricted to authorized domains (`topnepali.com`, `grisma.com.np`, `grisma.info.np`, and their subdomains). |
 | `format` | `string` | `png` | Target image format: `png`, `jpg` (or `jpeg`), `webp`. |
 | `width` | `number` | `1200` | Target width in pixels (range: `100` to `2400`). Aspect ratio is preserved. |
 | `quality` | `number` | `85` | Compression quality for `jpg` and `webp` (range: `10` to `100`). |

@@ -157,7 +157,7 @@
 
         <div class="space-y-2">
           <div class="text-xs font-bold text-gray-300 uppercase tracking-wider">Example Request (Remote SVG Ingestion):</div>
-          <pre><code>GET https://imagengine.grisma.info.np/api?url=https%3A%2F%2Fraw.githubusercontent.com%2F...%2Flogo.svg&amp;format=webp&amp;width=800</code></pre>
+          <pre><code>GET https://imagengine.grisma.info.np/api?url=https%3A%2F%2Felection.topnepali.com%2Fapi%2Fog.svg%3Ftitle%3DKathmandu&amp;format=webp&amp;width=800</code></pre>
         </div>
       </section>
 
@@ -198,7 +198,7 @@ Content-Type: image/svg+xml
                 <td class="p-3.5 font-mono text-cyan-400 font-bold">url</td>
                 <td class="p-3.5 text-gray-400">string</td>
                 <td class="p-3.5 text-gray-500">—</td>
-                <td class="p-3.5">Full URL of the source SVG to fetch and rasterize. Must be URL-encoded and served over HTTP/HTTPS.</td>
+                <td class="p-3.5">Full URL of the source SVG to fetch and rasterize. Strictly restricted to authorized domains (<code>topnepali.com</code>, <code>grisma.com.np</code>, <code>grisma.info.np</code>, and their subdomains) over HTTPS. Cross-domain requests are rejected with <code>403 Forbidden</code>.</td>
               </tr>
               <tr>
                 <td class="p-3.5 font-mono text-cyan-400 font-bold">format</td>
