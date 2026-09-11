@@ -18,58 +18,157 @@ function escapeXml(unsafe) {
   });
 }
 
-function buildDefaultSvg(title, subtitle, badge) {
-  const eTitle = escapeXml(title || 'ImageEngine');
-  const eSubtitle = escapeXml(subtitle || 'Universal High-Performance SVG to Image Edge API');
+function wrapText(text, maxCharsPerLine = 34, maxLines = 3) {
+  const words = String(text || '').trim().split(/\s+/);
+  if (!words.length || !words[0]) return [];
+  const lines = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    if (!currentLine) {
+      currentLine = word;
+    } else if ((currentLine + ' ' + word).length <= maxCharsPerLine) {
+      currentLine += ' ' + word;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+      if (lines.length >= maxLines - 1) break;
+    }
+  }
+  if (currentLine && lines.length < maxLines) {
+    lines.push(currentLine);
+  }
+  return lines;
+}
+
+function buildDefaultSvg(title, subtitle, badge, theme = 'cyber') {
+  const rawTitle = title || 'ImageEngine — Universal Edge Image API';
+  const rawSubtitle = subtitle || 'Convert any SVG into crisp PNG, JPG, or WebP at the edge with 1-year CDN caching.';
   const eBadge = escapeXml(badge || 'Open Graph Ready');
+
+  // Themes
+  const themes = {
+    cyber: {
+      bg0: '#030712', bg1: '#070f26', bg2: '#020617',
+      glow1: '#06b6d4', glow2: '#6366f1',
+      accent: '#38bdf8', badgeText: '#bae6fd',
+      cardBorder: 'rgba(56, 189, 248, 0.25)',
+      grid: 'rgba(56, 189, 248, 0.04)'
+    },
+    emerald: {
+      bg0: '#02120b', bg1: '#042217', bg2: '#010905',
+      glow1: '#10b981', glow2: '#0d9488',
+      accent: '#34d399', badgeText: '#a7f3d0',
+      cardBorder: 'rgba(52, 211, 153, 0.25)',
+      grid: 'rgba(52, 211, 153, 0.04)'
+    },
+    sunset: {
+      bg0: '#0e0517', bg1: '#1c082b', bg2: '#06010a',
+      glow1: '#f43f5e', glow2: '#f59e0b',
+      accent: '#fb7185', badgeText: '#fecdd3',
+      cardBorder: 'rgba(244, 63, 94, 0.25)',
+      grid: 'rgba(244, 63, 94, 0.04)'
+    },
+    midnight: {
+      bg0: '#000000', bg1: '#0a0d14', bg2: '#000000',
+      glow1: '#38bdf8', glow2: '#818cf8',
+      accent: '#7dd3fc', badgeText: '#e0f2fe',
+      cardBorder: 'rgba(255, 255, 255, 0.12)',
+      grid: 'rgba(255, 255, 255, 0.03)'
+    }
+  };
+
+  const t = themes[theme] || themes.cyber;
+
+  // Font sizing & text line calculation
+  const titleChars = rawTitle.length;
+  let titleFontSize = 54;
+  let titleLineHeight = 64;
+  let maxChars = 30;
+
+  if (titleChars > 70) {
+    titleFontSize = 38;
+    titleLineHeight = 48;
+    maxChars = 44;
+  } else if (titleChars > 35) {
+    titleFontSize = 46;
+    titleLineHeight = 56;
+    maxChars = 34;
+  }
+
+  const titleLines = wrapText(rawTitle, maxChars, 3);
+  const subtitleLines = wrapText(rawSubtitle, 52, 2);
+
+  // SVG text blocks
+  const titleSvg = titleLines.map((line, idx) =>
+    `<text x="0" y="${idx * titleLineHeight}" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="${titleFontSize}" font-weight="900" letter-spacing="-0.03em">${escapeXml(line)}</text>`
+  ).join('\n        ');
+
+  const subtitleStartY = (titleLines.length * titleLineHeight) + 12;
+  const subtitleSvg = subtitleLines.map((line, idx) =>
+    `<text x="0" y="${subtitleStartY + (idx * 30)}" fill="#94a3b8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="22" font-weight="500">${escapeXml(line)}</text>`
+  ).join('\n        ');
 
   return `
 <svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#050811" />
-      <stop offset="50%" stop-color="#0b1329" />
-      <stop offset="100%" stop-color="#020617" />
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${t.bg0}" />
+      <stop offset="50%" stop-color="${t.bg1}" />
+      <stop offset="100%" stop-color="${t.bg2}" />
     </linearGradient>
-    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#06b6d4" />
-      <stop offset="100%" stop-color="#6366f1" />
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${t.glow1}" />
+      <stop offset="100%" stop-color="${t.glow2}" />
     </linearGradient>
-    <filter id="blur" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="110" />
+    <pattern id="gridPattern" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M 48 0 L 0 0 0 48" fill="none" stroke="${t.grid}" stroke-width="1.2" />
+    </pattern>
+    <filter id="orbBlur" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="95" />
     </filter>
   </defs>
 
-  <rect width="1200" height="630" fill="url(#bg)" />
-  <circle cx="1060" cy="140" r="280" fill="#0ea5e9" opacity="0.22" filter="url(#blur)" />
-  <circle cx="140" cy="520" r="260" fill="#6366f1" opacity="0.18" filter="url(#blur)" />
-  <rect x="36" y="36" width="1128" height="558" rx="28" fill="none" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1.5" />
+  <!-- Background Base & Grid -->
+  <rect width="1200" height="630" fill="url(#bgGrad)" />
+  <rect width="1200" height="630" fill="url(#gridPattern)" />
 
-  <g transform="translate(80, 96)">
-    <rect width="52" height="52" rx="14" fill="url(#glow)" />
-    <text x="26" y="35" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="26" font-weight="900" text-anchor="middle">⚡</text>
-    <text x="70" y="35" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="800">ImageEngine</text>
-    <text x="236" y="35" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600">| Edge Image API</text>
+  <!-- Atmospheric Glow Orbs -->
+  <circle cx="1080" cy="110" r="280" fill="${t.glow1}" opacity="0.28" filter="url(#orbBlur)" />
+  <circle cx="120" cy="540" r="260" fill="${t.glow2}" opacity="0.22" filter="url(#orbBlur)" />
+
+  <!-- Outer Glass Frame -->
+  <rect x="32" y="32" width="1136" height="566" rx="28" fill="rgba(255, 255, 255, 0.015)" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1.5" />
+
+  <!-- Top Brand Header -->
+  <g transform="translate(80, 92)">
+    <!-- Icon Container -->
+    <rect width="50" height="50" rx="14" fill="url(#glowGrad)" />
+    <text x="25" y="34" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="24" font-weight="900" text-anchor="middle">⚡</text>
+    <!-- Brand Title -->
+    <text x="66" y="33" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="24" font-weight="800" letter-spacing="-0.02em">ImageEngine</text>
+    <circle cx="218" cy="27" r="3.5" fill="${t.accent}" />
+    <text x="232" y="33" fill="#64748b" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="15" font-weight="600">Edge Image API</text>
   </g>
 
-  <g transform="translate(80, 185)">
-    <rect width="260" height="38" rx="19" fill="#0f172a" stroke="rgba(14, 165, 233, 0.45)" stroke-width="1" />
-    <circle cx="20" cy="19" r="4.5" fill="#38bdf8" />
-    <text x="36" y="24" fill="#bae6fd" font-family="system-ui, monospace" font-size="13" font-weight="700">${eBadge}</text>
+  <!-- Pill Badge -->
+  <g transform="translate(80, 172)">
+    <rect width="${Math.max(eBadge.length * 10.5 + 44, 180)}" height="36" rx="18" fill="rgba(15, 23, 42, 0.85)" stroke="${t.cardBorder}" stroke-width="1.2" />
+    <circle cx="18" cy="18" r="4.5" fill="${t.accent}" />
+    <text x="32" y="23" fill="${t.badgeText}" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700">${eBadge}</text>
   </g>
 
-  <g transform="translate(80, 310)">
-    <text x="0" y="0" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="52" font-weight="900" letter-spacing="-1">${eTitle}</text>
+  <!-- Title & Subtitle Container -->
+  <g transform="translate(80, 275)">
+    ${titleSvg}
+    ${subtitleSvg}
   </g>
 
-  <g transform="translate(80, 375)">
-    <text x="0" y="0" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="500">${eSubtitle}</text>
-  </g>
-
-  <g transform="translate(80, 500)">
+  <!-- Bottom Metadata Footer -->
+  <g transform="translate(80, 525)">
     <line x1="0" y1="0" x2="1040" y2="0" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1" />
-    <text x="0" y="36" fill="#475569" font-family="system-ui, monospace" font-size="13" font-weight="600">HIGH-RESOLUTION OPEN GRAPH SOCIAL PREVIEW</text>
-    <text x="1040" y="36" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="14" font-weight="700" text-anchor="end">imagengine.grisma.com.np</text>
+    <text x="0" y="34" fill="#64748b" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="600" letter-spacing="0.08em">HIGH-RESOLUTION OPEN GRAPH SOCIAL PREVIEW</text>
+    <text x="1040" y="34" fill="${t.accent}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="700" text-anchor="end">imagengine.grisma.info.np</text>
   </g>
 </svg>
 `.trim();
@@ -117,7 +216,7 @@ export default async function handler(req, res) {
         upstream = await fetch(sourceUrl, {
           signal: controller.signal,
           headers: {
-            'User-Agent': 'ImageEngine/1.0 (+https://imagengine.grisma.com.np)',
+            'User-Agent': 'ImageEngine/1.0 (+https://imagengine.grisma.info.np)',
             'Accept': 'image/svg+xml,application/xml,text/xml,*/*',
           },
         });
@@ -128,7 +227,7 @@ export default async function handler(req, res) {
       if (!upstream.ok) {
         // Graceful fallback to dynamic card if title is available
         if (query.title) {
-          svgContent = buildDefaultSvg(query.title, query.subtitle, query.badge);
+          svgContent = buildDefaultSvg(query.title, query.subtitle, query.badge, query.theme);
         } else {
           return res.status(502).json({ error: `Upstream error fetching SVG (Status ${upstream.status})` });
         }
@@ -147,14 +246,15 @@ export default async function handler(req, res) {
     }
     // 3. Built-in Dynamic Card (?title=...&subtitle=...&badge=...)
     else if (query.title) {
-      svgContent = buildDefaultSvg(query.title, query.subtitle, query.badge);
+      svgContent = buildDefaultSvg(query.title, query.subtitle, query.badge, query.theme);
     }
     // 4. Default Demonstration Card
     else {
       svgContent = buildDefaultSvg(
         'ImageEngine API',
         'Universal SVG to Raster Edge Generator',
-        'Ready for WhatsApp & Social Cards'
+        'Ready for WhatsApp & Social Cards',
+        query.theme
       );
     }
 
