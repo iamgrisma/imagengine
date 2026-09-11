@@ -291,7 +291,7 @@ export default async function handler(req, res) {
     const { fontFiles } = loadFonts();
     return res.status(200).json({
       status: 'ok',
-      version: '2.3.0',
+      version: '2.4.0',
       timestamp: new Date().toISOString(),
       cwd: process.cwd(),
       __dirname,
@@ -306,8 +306,28 @@ export default async function handler(req, res) {
     });
   }
 
-  const slug = query.slug;
-  const folder = query.folder;
+  // Parse clean pathname if routed via /:slug.:ext or /:folder/:slug.:ext
+  const host = req.headers.host || 'imagengine.grisma.info.np';
+  const urlObj = new URL(req.url, `http://${host}`);
+  const pathname = urlObj.pathname;
+  let slug = query.slug || '';
+  let folder = query.folder || '';
+  let urlFormat = query.format || '';
+
+  const extMatch = pathname.match(/\.(png|webp|jpg|jpeg)$/i);
+  if (extMatch) {
+    if (!urlFormat) urlFormat = extMatch[1].toLowerCase();
+    const rawPath = pathname.slice(1, -extMatch[0].length);
+    const parts = rawPath.split('/').filter(Boolean);
+    if (!slug) {
+      if (parts.length > 1) {
+        folder = folder || parts[0];
+        slug = parts.slice(1).join('/');
+      } else if (parts.length === 1 && parts[0] !== 'api') {
+        slug = parts[0];
+      }
+    }
+  }
 
   // If user opens /api in browser without parameters, redirect to documentation
   const isHtml = req.headers.accept && req.headers.accept.includes('text/html');
@@ -415,7 +435,7 @@ export default async function handler(req, res) {
     }
 
     const width = Math.min(Math.max(parseInt(query.width, 10) || 1200, 100), 2400);
-    let format = (query.format || '').toLowerCase();
+    let format = (urlFormat || query.format || '').toLowerCase();
     if (!format && req.url) {
       const extMatch = req.url.split('?')[0].match(/\.(png|webp|jpg|jpeg)$/i);
       if (extMatch) format = extMatch[1].toLowerCase();
@@ -503,7 +523,7 @@ export default async function handler(req, res) {
     res.setHeader('Surrogate-Control', 'max-age=31536000');
     res.setHeader('Vary', 'Accept-Encoding');
     res.setHeader('X-Engine-Fonts', String(fontFiles ? fontFiles.length : 0));
-    res.setHeader('X-Engine-Version', '2.3.0');
+    res.setHeader('X-Engine-Version', '2.4.0');
 
     return res.status(200).send(outputBuffer);
   } catch (error) {
