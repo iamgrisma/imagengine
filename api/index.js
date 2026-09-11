@@ -1,10 +1,63 @@
 import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import crypto from 'crypto';
-import { robotoBold } from './font-bold.js';
-import { robotoRegular } from './font-regular.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const fontBuffers = [robotoBold, robotoRegular];
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Cache font files and buffers in memory across Lambda invocations
+let cachedFontFiles = null;
+let cachedFontBuffers = null;
+
+function loadFonts() {
+  if (cachedFontFiles && cachedFontFiles.length) return { fontFiles: cachedFontFiles, fontBuffers: cachedFontBuffers };
+  const files = [];
+  const buffers = [];
+  const searchDirs = [
+    path.join(__dirname, 'fonts'),
+    path.join(process.cwd(), 'api', 'fonts'),
+    path.join(process.cwd(), 'fonts'),
+  ];
+  for (const dir of searchDirs) {
+    try {
+      if (fs.existsSync(dir)) {
+        const found = fs.readdirSync(dir)
+          .filter(f => f.endsWith('.ttf') || f.endsWith('.otf'))
+          .map(f => path.join(dir, f));
+        if (found.length > 0) {
+          for (const f of found) {
+            try {
+              files.push(f);
+              buffers.push(fs.readFileSync(f));
+            } catch {}
+          }
+          break;
+        }
+      }
+    } catch {}
+  }
+  cachedFontFiles = files;
+  cachedFontBuffers = buffers;
+  return { fontFiles: files, fontBuffers: buffers };
+}
+
+async function getRequestBody(req) {
+  if (Buffer.isBuffer(req.body)) return req.body.toString('utf8');
+  if (typeof req.body === 'string') return req.body;
+  if (req.body && typeof req.body === 'object') {
+    if (typeof req.body.svg === 'string') return req.body.svg;
+    return JSON.stringify(req.body);
+  }
+  return new Promise((resolve) => {
+    let data = '';
+    req.on('data', chunk => { data += chunk; });
+    req.on('end', () => resolve(data));
+    req.on('error', () => resolve(''));
+  });
+}
 
 const MAX_SVG_SIZE_BYTES = 512 * 1024; // 512 KB payload guard
 const FETCH_TIMEOUT_MS = 6000;
@@ -103,14 +156,17 @@ function buildDefaultSvg(title, subtitle, badge, theme = 'cyber') {
   const titleLines = wrapText(rawTitle, maxChars, 3);
   const subtitleLines = wrapText(rawSubtitle, 52, 2);
 
+  const isAscii = /^[\x00-\x7F]*$/.test(rawTitle);
+  const letterSpacingAttr = isAscii ? ' letter-spacing="-0.03em"' : '';
+
   // SVG text blocks
   const titleSvg = titleLines.map((line, idx) =>
-    `<text x="0" y="${idx * titleLineHeight}" fill="#ffffff" font-family="Roboto, sans-serif" font-size="${titleFontSize}" font-weight="900" letter-spacing="-0.03em">${escapeXml(line)}</text>`
+    `<text x="0" y="${idx * titleLineHeight}" fill="#ffffff" font-family="Mukta, Roboto, sans-serif" font-size="${titleFontSize}" font-weight="700"${letterSpacingAttr}>${escapeXml(line)}</text>`
   ).join('\n        ');
 
   const subtitleStartY = (titleLines.length * titleLineHeight) + 12;
   const subtitleSvg = subtitleLines.map((line, idx) =>
-    `<text x="0" y="${subtitleStartY + (idx * 30)}" fill="#94a3b8" font-family="Roboto, sans-serif" font-size="22" font-weight="500">${escapeXml(line)}</text>`
+    `<text x="0" y="${subtitleStartY + (idx * 30)}" fill="#94a3b8" font-family="Mukta, Roboto, sans-serif" font-size="22" font-weight="500">${escapeXml(line)}</text>`
   ).join('\n        ');
 
   return `
@@ -159,7 +215,7 @@ function buildDefaultSvg(title, subtitle, badge, theme = 'cyber') {
   <g transform="translate(80, 172)">
     <rect width="${Math.max(eBadge.length * 10.5 + 44, 180)}" height="36" rx="18" fill="rgba(15, 23, 42, 0.85)" stroke="${t.cardBorder}" stroke-width="1.2" />
     <circle cx="18" cy="18" r="4.5" fill="${t.accent}" />
-    <text x="32" y="23" fill="${t.badgeText}" font-family="Roboto, sans-serif" font-size="13" font-weight="700">${eBadge}</text>
+    <text x="32" y="23" fill="${t.badgeText}" font-family="Mukta, Roboto, sans-serif" font-size="13" font-weight="700">${eBadge}</text>
   </g>
 
   <!-- Title & Subtitle Container -->
@@ -205,8 +261,20 @@ export default async function handler(req, res) {
     let svgContent = '';
 
     // 1. Remote SVG URL Mode (?url=https://...)
-    if (query.url) {
-      const sourceUrl = decodeURIComponent(query.url);
+    let targetUrl = query.url;
+    if (!targetUrl && req.url && req.url.includes('url=')) {
+      const idx = req.url.indexOf('url=');
+      targetUrl = req.url.slice(idx + 4);
+    }
+
+    if (targetUrl) {
+      let sourceUrl = targetUrl;
+      // Decode only if it starts with encoded http%3A or contains percent encoding
+      if (sourceUrl.startsWith('http%3A') || sourceUrl.startsWith('https%3A')) {
+        try {
+          sourceUrl = decodeURIComponent(sourceUrl);
+        } catch {}
+      }
 
       if (!sourceUrl.startsWith('http://') && !sourceUrl.startsWith('https://')) {
         return res.status(400).json({ error: 'Invalid URL scheme. Only HTTP and HTTPS are permitted.' });
@@ -241,9 +309,7 @@ export default async function handler(req, res) {
     }
     // 2. Direct POST Raw SVG Body
     else if (req.method === 'POST') {
-      const raw = Buffer.isBuffer(req.body)
-        ? req.body.toString('utf8')
-        : (typeof req.body === 'string' ? req.body : (req.body ? JSON.stringify(req.body) : ''));
+      const raw = await getRequestBody(req);
       if (raw && raw.includes('<svg')) {
         svgContent = raw;
       }
@@ -275,15 +341,29 @@ export default async function handler(req, res) {
     const format = (query.format || 'png').toLowerCase();
     const quality = Math.min(Math.max(parseInt(query.quality, 10) || 85, 10), 100);
 
-    // Rasterize SVG via Rust-compiled Resvg core with embedded in-memory fonts
-    const resvg = new Resvg(svgContent, {
+    // Load static font files & buffers (Mukta for Devanagari & Latin, Roboto)
+    const { fontFiles, fontBuffers } = loadFonts();
+    const resvgOptions = {
       fitTo: { mode: 'width', value: width },
-      font: {
+    };
+
+    if (fontFiles && fontFiles.length > 0) {
+      resvgOptions.font = {
+        fontFiles,
         fontBuffers,
-        defaultFontFamily: 'Roboto',
+        defaultFontFamily: 'Mukta',
+        sansSerifFamily: 'Mukta',
+        serifFamily: 'Mukta',
         loadSystemFonts: false,
-      },
-    });
+      };
+    } else {
+      resvgOptions.font = {
+        loadSystemFonts: true,
+      };
+    }
+
+    // Rasterize SVG via Rust-compiled Resvg core
+    const resvg = new Resvg(svgContent, resvgOptions);
     const pngBuffer = resvg.render().asPng();
 
     let outputBuffer = pngBuffer;

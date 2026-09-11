@@ -12,8 +12,7 @@
   "rewrites": [
     { "source": "/docs", "destination": "/docs.html" },
     { "source": "/privacy", "destination": "/privacy.html" },
-    { "source": "/terms", "destination": "/terms.html" },
-    { "source": "/api/(.*)", "destination": "/api/index.js" }
+    { "source": "/terms", "destination": "/terms.html" }
   ],
   "headers": [
     {
@@ -25,7 +24,7 @@
       ]
     },
     {
-      "source": "/api/(.*)",
+      "source": "/api(.*)",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
