@@ -12,7 +12,11 @@
   "rewrites": [
     { "source": "/docs", "destination": "/docs.html" },
     { "source": "/privacy", "destination": "/privacy.html" },
-    { "source": "/terms", "destination": "/terms.html" }
+    { "source": "/terms", "destination": "/terms.html" },
+    { "source": "/wiki/:slug.:ext(png|webp|jpg|jpeg)", "destination": "/api/index.js?folder=wiki&slug=:slug&format=:ext" },
+    { "source": "/election/:slug.:ext(png|webp|jpg|jpeg)", "destination": "/api/index.js?folder=election&slug=:slug&format=:ext" },
+    { "source": "/:folder/:slug.:ext(png|webp|jpg|jpeg)", "destination": "/api/index.js?folder=:folder&slug=:slug&format=:ext" },
+    { "source": "/:slug.:ext(png|webp|jpg|jpeg)", "destination": "/api/index.js?slug=:slug&format=:ext" }
   ],
   "headers": [
     {
