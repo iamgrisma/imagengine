@@ -8,14 +8,14 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Cache font files and buffers in memory across Lambda invocations
+// Cache font files and directories in memory across Lambda invocations
 let cachedFontFiles = null;
-let cachedFontBuffers = null;
+let cachedFontDirs = null;
 
 function loadFonts() {
-  if (cachedFontFiles && cachedFontFiles.length) return { fontFiles: cachedFontFiles, fontBuffers: cachedFontBuffers };
+  if (cachedFontFiles && cachedFontFiles.length) return { fontFiles: cachedFontFiles, fontDirs: cachedFontDirs };
   const files = [];
-  const buffers = [];
+  const dirs = [];
   const loadedNames = new Set();
   const searchDirs = [
     path.join(__dirname, 'fonts'),
@@ -29,24 +29,22 @@ function loadFonts() {
   for (const dir of searchDirs) {
     try {
       if (fs.existsSync(dir)) {
+        dirs.push(dir);
         const found = fs.readdirSync(dir)
           .filter(f => f.endsWith('.ttf') || f.endsWith('.otf'));
         for (const file of found) {
           if (!loadedNames.has(file)) {
             const fullPath = path.join(dir, file);
-            try {
-              files.push(fullPath);
-              buffers.push(fs.readFileSync(fullPath));
-              loadedNames.add(file);
-            } catch {}
+            files.push(fullPath);
+            loadedNames.add(file);
           }
         }
       }
     } catch {}
   }
   cachedFontFiles = files;
-  cachedFontBuffers = buffers;
-  return { fontFiles: files, fontBuffers: buffers };
+  cachedFontDirs = dirs;
+  return { fontFiles: files, fontDirs: dirs };
 }
 
 async function getRequestBody(req) {
@@ -257,7 +255,7 @@ export default async function handler(req, res) {
     const { fontFiles } = loadFonts();
     return res.status(200).json({
       status: 'ok',
-      version: '2.1.0',
+      version: '2.2.0',
       timestamp: new Date().toISOString(),
       cwd: process.cwd(),
       __dirname,
@@ -367,8 +365,8 @@ export default async function handler(req, res) {
     const format = (query.format || 'png').toLowerCase();
     const quality = Math.min(Math.max(parseInt(query.quality, 10) || 85, 10), 100);
 
-    // Load static font files & buffers (Mukta for Devanagari & Latin, Roboto)
-    const { fontFiles, fontBuffers } = loadFonts();
+    // Load static font files & dirs (Mukta for Devanagari & Latin, Roboto)
+    const { fontFiles, fontDirs } = loadFonts();
     const resvgOptions = {
       fitTo: { mode: 'width', value: width },
     };
@@ -376,7 +374,7 @@ export default async function handler(req, res) {
     if (fontFiles && fontFiles.length > 0) {
       resvgOptions.font = {
         fontFiles,
-        fontBuffers,
+        fontDirs,
         defaultFontFamily: 'Mukta',
         sansSerifFamily: 'Mukta',
         serifFamily: 'Mukta',
@@ -447,7 +445,7 @@ export default async function handler(req, res) {
     res.setHeader('Surrogate-Control', 'max-age=31536000');
     res.setHeader('Vary', 'Accept-Encoding');
     res.setHeader('X-Engine-Fonts', String(fontFiles ? fontFiles.length : 0));
-    res.setHeader('X-Engine-Version', '2.1.0');
+    res.setHeader('X-Engine-Version', '2.2.0');
 
     return res.status(200).send(outputBuffer);
   } catch (error) {
