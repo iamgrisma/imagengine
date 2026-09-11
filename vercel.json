@@ -13,6 +13,8 @@
     { "source": "/docs", "destination": "/docs.html" },
     { "source": "/privacy", "destination": "/privacy.html" },
     { "source": "/terms", "destination": "/terms.html" },
+    { "source": "/raw/(.*)", "destination": "/api" },
+    { "source": "/p/(.*)", "destination": "/api" },
     { "source": "/(.*)\\.(png|webp|jpg|jpeg)", "destination": "/api" }
   ],
   "headers": [

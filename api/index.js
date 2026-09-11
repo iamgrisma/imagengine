@@ -291,7 +291,7 @@ export default async function handler(req, res) {
     const { fontFiles } = loadFonts();
     return res.status(200).json({
       status: 'ok',
-      version: '2.4.0',
+      version: '2.5.0',
       timestamp: new Date().toISOString(),
       cwd: process.cwd(),
       __dirname,
@@ -348,6 +348,18 @@ export default async function handler(req, res) {
     if (!targetUrl && req.url && req.url.includes('url=')) {
       const idx = req.url.indexOf('url=');
       targetUrl = req.url.slice(idx + 4);
+    }
+
+    // Direct /raw/ or /p/ proxy: e.g. /raw/https://randomsite.com/path/abc.svg
+    if (!targetUrl && (pathname.startsWith('/raw/') || pathname.startsWith('/p/'))) {
+      const rawPrefix = pathname.startsWith('/raw/') ? '/raw/' : '/p/';
+      let rawTarget = pathname.slice(rawPrefix.length);
+      if (urlObj.search) rawTarget += urlObj.search;
+      rawTarget = rawTarget.replace(/\.(png|webp|jpg|jpeg)$/i, '');
+      if (!rawTarget.startsWith('http://') && !rawTarget.startsWith('https://')) {
+        rawTarget = 'https://' + rawTarget;
+      }
+      targetUrl = rawTarget;
     }
 
     // Special folder shortcuts: e.g. /wiki/Nepalese_Election_Symbol_Tree.png
@@ -523,7 +535,20 @@ export default async function handler(req, res) {
     res.setHeader('Surrogate-Control', 'max-age=31536000');
     res.setHeader('Vary', 'Accept-Encoding');
     res.setHeader('X-Engine-Fonts', String(fontFiles ? fontFiles.length : 0));
-    res.setHeader('X-Engine-Version', '2.4.0');
+    res.setHeader('X-Engine-Version', '2.5.0');
+
+    // Set Content-Disposition header with clean file name
+    let downloadName = 'image';
+    if (slug && slug !== 'api' && slug !== 'render' && slug !== 'raw' && slug !== 'p') {
+      downloadName = slug.split('/').pop().replace(/[^a-zA-Z0-9_-]/g, '_');
+    } else if (targetUrl) {
+      try {
+        const u = new URL(targetUrl);
+        const base = path.basename(u.pathname).replace(/\.(svg|png|webp|jpg|jpeg)$/gi, '');
+        if (base && base !== '/') downloadName = base.replace(/[^a-zA-Z0-9_-]/g, '_');
+      } catch {}
+    }
+    res.setHeader('Content-Disposition', `inline; filename="${downloadName}.${format}"`);
 
     return res.status(200).send(outputBuffer);
   } catch (error) {
