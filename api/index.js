@@ -1,6 +1,41 @@
 import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Cache font buffers in memory across Lambda invocations
+let cachedFontBuffers = null;
+function loadFontBuffers() {
+  if (cachedFontBuffers && cachedFontBuffers.length) return cachedFontBuffers;
+  const buffers = [];
+  const searchDirs = [
+    path.join(__dirname, 'fonts'),
+    path.join(process.cwd(), 'api', 'fonts'),
+    path.join(process.cwd(), 'fonts'),
+  ];
+  for (const dir of searchDirs) {
+    try {
+      const bold = path.join(dir, 'Roboto-Bold.ttf');
+      const reg = path.join(dir, 'Roboto-Regular.ttf');
+      if (fs.existsSync(bold)) {
+        buffers.push(fs.readFileSync(bold));
+        if (fs.existsSync(reg)) {
+          buffers.push(fs.readFileSync(reg));
+        }
+        break;
+      }
+    } catch (e) {
+      // Continue search
+    }
+  }
+  cachedFontBuffers = buffers;
+  return buffers;
+}
 
 const MAX_SVG_SIZE_BYTES = 512 * 1024; // 512 KB payload guard
 const FETCH_TIMEOUT_MS = 6000;
@@ -101,12 +136,12 @@ function buildDefaultSvg(title, subtitle, badge, theme = 'cyber') {
 
   // SVG text blocks
   const titleSvg = titleLines.map((line, idx) =>
-    `<text x="0" y="${idx * titleLineHeight}" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="${titleFontSize}" font-weight="900" letter-spacing="-0.03em">${escapeXml(line)}</text>`
+    `<text x="0" y="${idx * titleLineHeight}" fill="#ffffff" font-family="Roboto, sans-serif" font-size="${titleFontSize}" font-weight="900" letter-spacing="-0.03em">${escapeXml(line)}</text>`
   ).join('\n        ');
 
   const subtitleStartY = (titleLines.length * titleLineHeight) + 12;
   const subtitleSvg = subtitleLines.map((line, idx) =>
-    `<text x="0" y="${subtitleStartY + (idx * 30)}" fill="#94a3b8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="22" font-weight="500">${escapeXml(line)}</text>`
+    `<text x="0" y="${subtitleStartY + (idx * 30)}" fill="#94a3b8" font-family="Roboto, sans-serif" font-size="22" font-weight="500">${escapeXml(line)}</text>`
   ).join('\n        ');
 
   return `
@@ -144,18 +179,18 @@ function buildDefaultSvg(title, subtitle, badge, theme = 'cyber') {
   <g transform="translate(80, 92)">
     <!-- Icon Container -->
     <rect width="50" height="50" rx="14" fill="url(#glowGrad)" />
-    <text x="25" y="34" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="24" font-weight="900" text-anchor="middle">⚡</text>
+    <text x="25" y="34" fill="#ffffff" font-family="Roboto, sans-serif" font-size="24" font-weight="900" text-anchor="middle">⚡</text>
     <!-- Brand Title -->
-    <text x="66" y="33" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="24" font-weight="800" letter-spacing="-0.02em">ImageEngine</text>
+    <text x="66" y="33" fill="#ffffff" font-family="Roboto, sans-serif" font-size="24" font-weight="800" letter-spacing="-0.02em">ImageEngine</text>
     <circle cx="218" cy="27" r="3.5" fill="${t.accent}" />
-    <text x="232" y="33" fill="#64748b" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="15" font-weight="600">Edge Image API</text>
+    <text x="232" y="33" fill="#64748b" font-family="Roboto, sans-serif" font-size="15" font-weight="600">Edge Image API</text>
   </g>
 
   <!-- Pill Badge -->
   <g transform="translate(80, 172)">
     <rect width="${Math.max(eBadge.length * 10.5 + 44, 180)}" height="36" rx="18" fill="rgba(15, 23, 42, 0.85)" stroke="${t.cardBorder}" stroke-width="1.2" />
     <circle cx="18" cy="18" r="4.5" fill="${t.accent}" />
-    <text x="32" y="23" fill="${t.badgeText}" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700">${eBadge}</text>
+    <text x="32" y="23" fill="${t.badgeText}" font-family="Roboto, sans-serif" font-size="13" font-weight="700">${eBadge}</text>
   </g>
 
   <!-- Title & Subtitle Container -->
@@ -167,8 +202,8 @@ function buildDefaultSvg(title, subtitle, badge, theme = 'cyber') {
   <!-- Bottom Metadata Footer -->
   <g transform="translate(80, 525)">
     <line x1="0" y1="0" x2="1040" y2="0" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1" />
-    <text x="0" y="34" fill="#64748b" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="600" letter-spacing="0.08em">HIGH-RESOLUTION OPEN GRAPH SOCIAL PREVIEW</text>
-    <text x="1040" y="34" fill="${t.accent}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="700" text-anchor="end">imagengine.grisma.info.np</text>
+    <text x="0" y="34" fill="#64748b" font-family="Roboto, sans-serif" font-size="12" font-weight="600" letter-spacing="0.08em">HIGH-RESOLUTION OPEN GRAPH SOCIAL PREVIEW</text>
+    <text x="1040" y="34" fill="${t.accent}" font-family="Roboto, sans-serif" font-size="14" font-weight="700" text-anchor="end">imagengine.grisma.info.np</text>
   </g>
 </svg>
 `.trim();
@@ -271,10 +306,26 @@ export default async function handler(req, res) {
     const format = (query.format || 'png').toLowerCase();
     const quality = Math.min(Math.max(parseInt(query.quality, 10) || 85, 10), 100);
 
-    // Rasterize SVG via Rust-compiled Resvg core
-    const resvg = new Resvg(svgContent, {
+    // Load font buffers (bundled Roboto fonts)
+    const fontBuffers = loadFontBuffers();
+    const resvgOptions = {
       fitTo: { mode: 'width', value: width },
-    });
+    };
+
+    if (fontBuffers && fontBuffers.length > 0) {
+      resvgOptions.font = {
+        fontBuffers,
+        defaultFontFamily: 'Roboto',
+        loadSystemFonts: true,
+      };
+    } else {
+      resvgOptions.font = {
+        loadSystemFonts: true,
+      };
+    }
+
+    // Rasterize SVG via Rust-compiled Resvg core
+    const resvg = new Resvg(svgContent, resvgOptions);
     const pngBuffer = resvg.render().asPng();
 
     let outputBuffer = pngBuffer;
