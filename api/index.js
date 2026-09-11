@@ -1,41 +1,10 @@
 import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { robotoBold } from './font-bold.js';
+import { robotoRegular } from './font-regular.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Cache font buffers in memory across Lambda invocations
-let cachedFontBuffers = null;
-function loadFontBuffers() {
-  if (cachedFontBuffers && cachedFontBuffers.length) return cachedFontBuffers;
-  const buffers = [];
-  const searchDirs = [
-    path.join(__dirname, 'fonts'),
-    path.join(process.cwd(), 'api', 'fonts'),
-    path.join(process.cwd(), 'fonts'),
-  ];
-  for (const dir of searchDirs) {
-    try {
-      const bold = path.join(dir, 'Roboto-Bold.ttf');
-      const reg = path.join(dir, 'Roboto-Regular.ttf');
-      if (fs.existsSync(bold)) {
-        buffers.push(fs.readFileSync(bold));
-        if (fs.existsSync(reg)) {
-          buffers.push(fs.readFileSync(reg));
-        }
-        break;
-      }
-    } catch (e) {
-      // Continue search
-    }
-  }
-  cachedFontBuffers = buffers;
-  return buffers;
-}
+const fontBuffers = [robotoBold, robotoRegular];
 
 const MAX_SVG_SIZE_BYTES = 512 * 1024; // 512 KB payload guard
 const FETCH_TIMEOUT_MS = 6000;
@@ -306,26 +275,15 @@ export default async function handler(req, res) {
     const format = (query.format || 'png').toLowerCase();
     const quality = Math.min(Math.max(parseInt(query.quality, 10) || 85, 10), 100);
 
-    // Load font buffers (bundled Roboto fonts)
-    const fontBuffers = loadFontBuffers();
-    const resvgOptions = {
+    // Rasterize SVG via Rust-compiled Resvg core with embedded in-memory fonts
+    const resvg = new Resvg(svgContent, {
       fitTo: { mode: 'width', value: width },
-    };
-
-    if (fontBuffers && fontBuffers.length > 0) {
-      resvgOptions.font = {
+      font: {
         fontBuffers,
         defaultFontFamily: 'Roboto',
-        loadSystemFonts: true,
-      };
-    } else {
-      resvgOptions.font = {
-        loadSystemFonts: true,
-      };
-    }
-
-    // Rasterize SVG via Rust-compiled Resvg core
-    const resvg = new Resvg(svgContent, resvgOptions);
+        loadSystemFonts: false,
+      },
+    });
     const pngBuffer = resvg.render().asPng();
 
     let outputBuffer = pngBuffer;

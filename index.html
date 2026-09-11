@@ -202,22 +202,22 @@
             <div id="form-card" class="space-y-4">
               <div>
                 <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Headline Title</label>
-                <input type="text" id="card-title" value="Kathmandu Constituency 4: Election Results" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors" placeholder="Page or article title...">
+                <input type="text" id="card-title" oninput="debounceRender()" value="Kathmandu Constituency 4: Election Results" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors" placeholder="Page or article title...">
               </div>
 
               <div>
                 <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Subtitle / Description</label>
-                <input type="text" id="card-subtitle" value="Gagan Kumar Thapa (Nepali Congress) declared winner with 21,302 votes" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors" placeholder="Secondary description line...">
+                <input type="text" id="card-subtitle" oninput="debounceRender()" value="Gagan Kumar Thapa (Nepali Congress) declared winner with 21,302 votes" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors" placeholder="Secondary description line...">
               </div>
 
               <div class="grid grid-cols-2 gap-3">
                 <div>
                   <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Badge Label</label>
-                  <input type="text" id="card-badge" value="House of Representatives 2079" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors">
+                  <input type="text" id="card-badge" oninput="debounceRender()" value="House of Representatives 2079" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors">
                 </div>
                 <div>
                   <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Visual Theme</label>
-                  <select id="card-theme" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                  <select id="card-theme" onchange="renderLiveImage()" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
                     <option value="cyber" selected>Cyber (Cyan & Indigo)</option>
                     <option value="emerald">Emerald (Teal & Forest)</option>
                     <option value="sunset">Sunset (Rose & Amber)</option>
@@ -254,7 +254,7 @@
             <div class="grid grid-cols-2 gap-3 pt-2">
               <div>
                 <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Output Format</label>
-                <select id="opt-format" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                <select id="opt-format" onchange="renderLiveImage()" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
                   <option value="png" selected>PNG (Lossless, WhatsApp/FB standard)</option>
                   <option value="jpg">JPG (Compressed, smaller size)</option>
                   <option value="webp">WebP (Modern edge format)</option>
@@ -262,7 +262,7 @@
               </div>
               <div>
                 <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Width</label>
-                <select id="opt-width" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                <select id="opt-width" onchange="renderLiveImage()" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
                   <option value="1200" selected>1200 px (OG Standard 1.91:1)</option>
                   <option value="800">800 px (Medium Card)</option>
                   <option value="600">600 px (Thumbnail)</option>
@@ -407,6 +407,21 @@
   <script>
     let currentMode = 'card';
     let currentSnippet = 'url';
+    let debounceTimer = null;
+
+    function debounceRender() {
+      // Instantly update text in the WhatsApp preview simulator for immediate visual feedback
+      if (currentMode === 'card') {
+        const t = document.getElementById('card-title').value.trim() || 'ImageEngine';
+        const s = document.getElementById('card-subtitle').value.trim() || 'Edge Generation';
+        document.getElementById('social-preview-title').innerText = t;
+        document.getElementById('social-preview-desc').innerText = s;
+      }
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        renderLiveImage();
+      }, 400);
+    }
 
     function setMode(mode) {
       currentMode = mode;
