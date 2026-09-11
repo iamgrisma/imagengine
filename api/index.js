@@ -207,7 +207,7 @@ function buildDefaultSvg(title, subtitle, badge, theme = 'cyber') {
   <g transform="translate(80, 92)">
     <!-- Icon Container -->
     <rect width="50" height="50" rx="14" fill="url(#glowGrad)" />
-    <text x="25" y="34" fill="#ffffff" font-family="Roboto, sans-serif" font-size="24" font-weight="900" text-anchor="middle">⚡</text>
+    <path d="M27 12L16 27h9l-2 15 13-18h-9l2-12z" fill="#ffffff" />
     <!-- Brand Title -->
     <text x="66" y="33" fill="#ffffff" font-family="Roboto, sans-serif" font-size="24" font-weight="800" letter-spacing="-0.02em">ImageEngine</text>
     <circle cx="218" cy="27" r="3.5" fill="${t.accent}" />
