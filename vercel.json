@@ -15,7 +15,7 @@
     { "source": "/terms", "destination": "/terms.html" },
     { "source": "/raw/(.*)", "destination": "/api" },
     { "source": "/p/(.*)", "destination": "/api" },
-    { "source": "/(.*)\\.(png|webp|jpg|jpeg)", "destination": "/api" }
+    { "source": "/(.*)\\.(png|webp|jpg|jpeg)", "destination": "/api?path=$1&format=$2" }
   ],
   "headers": [
     {

@@ -66,7 +66,8 @@ async function getRequestBody(req) {
 const ALLOWED_ROOT_DOMAINS = [
   'topnepali.com',
   'grisma.com.np',
-  'grisma.info.np'
+  'grisma.info.np',
+  'vercel.app'
 ];
 
 /**
@@ -107,7 +108,7 @@ async function fetchAllowedSvg(sourceUrl, signal) {
       signal,
       redirect: 'manual',
       headers: {
-        'User-Agent': 'ImageEngine/1.0 (+https://imagengine.grisma.info.np)',
+        'User-Agent': 'ImageEngine/2.0 (+https://img.topnepali.com; Cloudflare-Edge-Rasterizer)',
         'Accept': 'image/svg+xml,application/xml,text/xml,*/*',
       },
     });
@@ -122,7 +123,24 @@ async function fetchAllowedSvg(sourceUrl, signal) {
       continue;
     }
 
-    return { ok: true, status: res.status, response: res };
+    if (res.status !== 200) {
+      return {
+        ok: false,
+        status: res.status,
+        error: `Upstream server returned HTTP ${res.status}`
+      };
+    }
+
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
+    if (!contentType.includes('svg') && !contentType.includes('xml') && !contentType.includes('text/plain')) {
+      return {
+        ok: false,
+        status: 415,
+        error: `Upstream server returned non-SVG content-type: ${contentType}`
+      };
+    }
+
+    return { ok: true, status: 200, response: res };
   }
 
   return { ok: false, status: 508, error: 'Too many redirects from upstream server' };
@@ -167,7 +185,7 @@ function wrapText(text, maxCharsPerLine = 34, maxLines = 3) {
   return lines;
 }
 
-function buildDefaultSvg(title, subtitle, badge, theme = 'cyber') {
+function buildDefaultSvg(title, subtitle, badge, theme = 'cyber', brand = 'ImageEngine', footerDomain = 'imagengine.grisma.info.np') {
   const rawTitle = title || 'ImageEngine — Universal Edge Image API';
   const rawSubtitle = subtitle || 'Convert any SVG into crisp PNG, JPG, or WebP at the edge with 1-year CDN caching.';
   const eBadge = escapeXml(badge || 'Open Graph Ready');
@@ -275,9 +293,9 @@ function buildDefaultSvg(title, subtitle, badge, theme = 'cyber') {
     <rect width="50" height="50" rx="14" fill="url(#glowGrad)" />
     <path d="M27 12L16 27h9l-2 15 13-18h-9l2-12z" fill="#ffffff" />
     <!-- Brand Title -->
-    <text x="66" y="33" fill="#ffffff" font-family="Roboto, sans-serif" font-size="24" font-weight="800" letter-spacing="-0.02em">ImageEngine</text>
-    <circle cx="218" cy="27" r="3.5" fill="${t.accent}" />
-    <text x="232" y="33" fill="#64748b" font-family="Roboto, sans-serif" font-size="15" font-weight="600">Edge Image API</text>
+    <text x="66" y="33" fill="#ffffff" font-family="Roboto, sans-serif" font-size="24" font-weight="800" letter-spacing="-0.02em">${escapeXml(brand)}</text>
+    <circle cx="${66 + Math.round(brand.length * 14.5)}" cy="27" r="3.5" fill="${t.accent}" />
+    <text x="${80 + Math.round(brand.length * 14.5)}" y="33" fill="#64748b" font-family="Roboto, sans-serif" font-size="15" font-weight="600">Edge Image API</text>
   </g>
 
   <!-- Pill Badge -->
@@ -297,7 +315,7 @@ function buildDefaultSvg(title, subtitle, badge, theme = 'cyber') {
   <g transform="translate(80, 525)">
     <line x1="0" y1="0" x2="1040" y2="0" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1" />
     <text x="0" y="34" fill="#64748b" font-family="Roboto, sans-serif" font-size="12" font-weight="600" letter-spacing="0.08em">HIGH-RESOLUTION OPEN GRAPH SOCIAL PREVIEW</text>
-    <text x="1040" y="34" fill="${t.accent}" font-family="Roboto, sans-serif" font-size="14" font-weight="700" text-anchor="end">imagengine.grisma.info.np</text>
+    <text x="1040" y="34" fill="${t.accent}" font-family="Roboto, sans-serif" font-size="14" font-weight="700" text-anchor="end">${escapeXml(footerDomain)}</text>
   </g>
 </svg>
 `.trim();
@@ -338,31 +356,51 @@ export default async function handler(req, res) {
   }
 
   // Parse clean pathname if routed via /:slug.:ext or /:folder/:slug.:ext
-  const host = req.headers.host || 'imagengine.grisma.info.np';
-  const urlObj = new URL(req.url, `http://${host}`);
+  const host = req.headers.host || 'img.topnepali.com';
+  const rawReqUrl = req.headers['x-forwarded-uri'] || req.headers['x-matched-path'] || req.url;
+  const urlObj = new URL(rawReqUrl, `http://${host}`);
   const pathname = urlObj.pathname;
   let slug = query.slug || '';
   let folder = query.folder || '';
-  let urlFormat = query.format || '';
+  let urlFormat = (query.format || '').toLowerCase();
+  let rawPath = query.path ? String(query.path).replace(/^\/+/, '') : '';
 
-  const extMatch = pathname.match(/\.(png|webp|jpg|jpeg)$/i);
-  if (extMatch) {
-    if (!urlFormat) urlFormat = extMatch[1].toLowerCase();
-    const rawPath = pathname.slice(1, -extMatch[0].length);
-    const parts = rawPath.split('/').filter(Boolean);
-    if (!slug) {
-      if (parts.length > 1) {
-        folder = folder || parts[0];
-        slug = parts.slice(1).join('/');
-      } else if (parts.length === 1 && parts[0] !== 'api') {
-        slug = parts[0];
-      }
+  if (!rawPath) {
+    const extMatch = pathname.match(/\.(png|webp|jpg|jpeg)$/i);
+    if (extMatch) {
+      if (!urlFormat) urlFormat = extMatch[1].toLowerCase();
+      rawPath = pathname.slice(1, -extMatch[0].length);
+    }
+  } else if (!urlFormat) {
+    const extMatch = rawPath.match(/\.(png|webp|jpg|jpeg)$/i);
+    if (extMatch) {
+      urlFormat = extMatch[1].toLowerCase();
+      rawPath = rawPath.slice(0, -extMatch[0].length);
     }
   }
 
+  // Strip leading 'og/' if present
+  if (rawPath.startsWith('og/')) {
+    rawPath = rawPath.slice(3);
+  }
+
+  const parts = rawPath.split('/').filter(Boolean);
+  if (!slug) {
+    if (parts.length > 1) {
+      folder = folder || parts[0];
+      slug = parts.slice(1).join('/');
+    } else if (parts.length === 1 && parts[0] !== 'api') {
+      slug = parts[0];
+    }
+  }
+
+  const isTopNepaliHost = host.includes('topnepali.com');
+  const brandName = isTopNepaliHost ? 'TopNepali' : 'ImageEngine';
+  const footerDomain = isTopNepaliHost ? 'election.topnepali.com' : 'imagengine.grisma.info.np';
+
   // If user opens /api in browser without parameters, redirect to documentation
   const isHtml = req.headers.accept && req.headers.accept.includes('text/html');
-  const hasParams = query.url || query.title || query.svg || slug;
+  const hasParams = query.url || query.title || query.svg || slug || rawPath;
   if (isHtml && !hasParams && req.method === 'GET') {
     if (typeof res.redirect === 'function') {
       return res.redirect(302, '/docs');
@@ -393,9 +431,26 @@ export default async function handler(req, res) {
       targetUrl = rawTarget;
     }
 
-    // Special folder shortcuts: e.g. /election/manish-jha.png
-    if (!targetUrl && folder === 'election' && slug) {
-      targetUrl = `https://election.topnepali.com/api/og.svg?title=${encodeURIComponent(slug)}`;
+    // 2. Election Nepal Canonical Slugs: Map directly to dynamic vector SVG
+    // Supports /candidate/:slug, /constituency/:id, /district/:slug, /party/:slug, /palika/:id,
+    // /province/:slug, /province-assembly/:slug, /home, /federal-election-*, /local-election-*,
+    // /parties, /districts, /provinces, /samanupatik, /by-elections, /records-*, etc.
+    const isElectionFolder = ['candidate', 'constituency', 'district', 'party', 'palika', 'province', 'province-assembly', 'election'].includes(folder);
+    const isElectionStaticSlug = [
+      'home', 'parties', 'districts', 'provinces', 'vips', 'samanupatik', 'by-elections', 'records'
+    ].includes(rawPath) || rawPath.startsWith('federal-election') || rawPath.startsWith('local-election') || rawPath.startsWith('province-election') || rawPath.startsWith('records-');
+
+    if (!targetUrl && rawPath && rawPath !== 'api' && (isTopNepaliHost || isElectionFolder || isElectionStaticSlug)) {
+      const upstreamSlug = folder === 'election' ? `candidate/${slug}` : rawPath;
+
+      const forwardParams = new URLSearchParams();
+      for (const [key, val] of Object.entries(query)) {
+        if (!['path', 'format', 'width', 'quality', 'slug', 'folder', 'theme', 'url'].includes(key)) {
+          forwardParams.set(key, val);
+        }
+      }
+      const forwardQuery = forwardParams.toString() ? `?${forwardParams.toString()}` : '';
+      targetUrl = `https://election.topnepali.com/og/${upstreamSlug}.svg${forwardQuery}`;
     }
 
     if (targetUrl) {
@@ -433,10 +488,11 @@ export default async function handler(req, res) {
         if (fetchResult.status === 403) {
           return res.status(403).json({ error: fetchResult.error });
         }
-        // Graceful fallback to dynamic card if title or slug is available and error is 404/5xx
-        if (query.title || slug) {
-          const fallbackTitle = query.title || slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-          svgContent = buildDefaultSvg(fallbackTitle, query.subtitle, query.badge, query.theme);
+        // Graceful fallback to dynamic card if title, slug, or rawPath is available and error is 404/5xx
+        if (query.title || slug || rawPath) {
+          const fallbackTitle = query.title || (slug || rawPath).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          const fallbackBadge = query.badge || (folder ? folder.toUpperCase() : (isTopNepaliHost ? 'ELECTION NEPAL' : 'Open Graph Ready'));
+          svgContent = buildDefaultSvg(fallbackTitle, query.subtitle, fallbackBadge, query.theme, brandName, footerDomain);
         } else {
           return res.status(fetchResult.status || 502).json({
             error: fetchResult.error || `Upstream error fetching SVG (Status ${fetchResult.status})`
@@ -446,31 +502,40 @@ export default async function handler(req, res) {
         svgContent = await fetchResult.response.text();
       }
     }
-    // 2. Direct POST Raw SVG Body
+    // 3. Direct POST Raw SVG Body
     else if (req.method === 'POST') {
       const raw = await getRequestBody(req);
       if (raw && raw.includes('<svg')) {
         svgContent = raw;
       }
     }
-    // 3. Built-in Dynamic Card (?title=... or clean :slug)
-    else if (query.title || slug) {
-      const effectiveTitle = query.title || slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      const effectiveBadge = query.badge || (folder ? folder.toUpperCase() : 'Open Graph Ready');
-      svgContent = buildDefaultSvg(effectiveTitle, query.subtitle, effectiveBadge, query.theme);
+    // 4. Built-in Dynamic Card (?title=... or clean :slug)
+    else if (query.title || slug || rawPath) {
+      const effectiveTitle = query.title || (slug || rawPath).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const effectiveBadge = query.badge || (folder ? folder.toUpperCase() : (isTopNepaliHost ? 'ELECTION NEPAL' : 'Open Graph Ready'));
+      svgContent = buildDefaultSvg(effectiveTitle, query.subtitle, effectiveBadge, query.theme, brandName, footerDomain);
     }
-    // 4. Default Demonstration Card
+    // 5. Default Demonstration Card
     else {
       svgContent = buildDefaultSvg(
-        'ImageEngine API',
-        'Universal SVG to Raster Edge Generator',
-        'Ready for WhatsApp & Social Cards',
-        query.theme
+        isTopNepaliHost ? 'Election Nepal' : 'ImageEngine API',
+        isTopNepaliHost ? 'Universal Open Graph Image Service' : 'Universal SVG to Raster Edge Generator',
+        isTopNepaliHost ? 'TopNepali Brand' : 'Ready for WhatsApp & Social Cards',
+        query.theme,
+        brandName,
+        footerDomain
       );
     }
 
-    if (!svgContent || !svgContent.includes('<svg')) {
-      return res.status(400).json({ error: 'Invalid or missing SVG payload' });
+    const isValidSvg = svgContent && (svgContent.includes('<svg ') || svgContent.includes('<svg>') || svgContent.includes('<svg\n') || svgContent.includes('<svg\r'));
+    if (!isValidSvg) {
+      if (query.title || slug || rawPath) {
+        const fallbackTitle = query.title || (slug || rawPath).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const fallbackBadge = query.badge || (folder ? folder.toUpperCase() : (isTopNepaliHost ? 'ELECTION NEPAL' : 'Open Graph Ready'));
+        svgContent = buildDefaultSvg(fallbackTitle, query.subtitle, fallbackBadge, query.theme, brandName, footerDomain);
+      } else {
+        return res.status(400).json({ error: 'Invalid or missing SVG payload' });
+      }
     }
 
     // Payload size safeguard to prevent memory abuse
@@ -573,6 +638,8 @@ export default async function handler(req, res) {
     let downloadName = 'image';
     if (slug && slug !== 'api' && slug !== 'render' && slug !== 'raw' && slug !== 'p') {
       downloadName = slug.split('/').pop().replace(/[^a-zA-Z0-9_-]/g, '_');
+    } else if (rawPath && rawPath !== 'api') {
+      downloadName = rawPath.split('/').pop().replace(/[^a-zA-Z0-9_-]/g, '_');
     } else if (targetUrl) {
       try {
         const u = new URL(targetUrl);
