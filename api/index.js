@@ -185,140 +185,56 @@ function wrapText(text, maxCharsPerLine = 34, maxLines = 3) {
   return lines;
 }
 
-function buildDefaultSvg(title, subtitle, badge, theme = 'cyber', brand = 'ImageEngine', footerDomain = 'imagengine.grisma.info.np') {
-  const rawTitle = title || 'ImageEngine — Universal Edge Image API';
-  const rawSubtitle = subtitle || 'Convert any SVG into crisp PNG, JPG, or WebP at the edge with 1-year CDN caching.';
-  const eBadge = escapeXml(badge || 'Open Graph Ready');
+function buildDefaultSvg(title, subtitle, badge, theme = 'dark', brand = 'TopNepali', footerDomain = 'election.topnepali.com') {
+  const rawTitle = title || 'TopNepali Election Engine';
+  const rawSubtitle = subtitle || 'Official Election Social Preview & Realtime Results';
+  const eBadge = escapeXml(badge || 'ELECTION NEPAL');
 
-  // Themes
-  const themes = {
-    cyber: {
-      bg0: '#030712', bg1: '#070f26', bg2: '#020617',
-      glow1: '#06b6d4', glow2: '#6366f1',
-      accent: '#38bdf8', badgeText: '#bae6fd',
-      cardBorder: 'rgba(56, 189, 248, 0.25)',
-      grid: 'rgba(56, 189, 248, 0.04)'
-    },
-    emerald: {
-      bg0: '#02120b', bg1: '#042217', bg2: '#010905',
-      glow1: '#10b981', glow2: '#0d9488',
-      accent: '#34d399', badgeText: '#a7f3d0',
-      cardBorder: 'rgba(52, 211, 153, 0.25)',
-      grid: 'rgba(52, 211, 153, 0.04)'
-    },
-    sunset: {
-      bg0: '#0e0517', bg1: '#1c082b', bg2: '#06010a',
-      glow1: '#f43f5e', glow2: '#f59e0b',
-      accent: '#fb7185', badgeText: '#fecdd3',
-      cardBorder: 'rgba(244, 63, 94, 0.25)',
-      grid: 'rgba(244, 63, 94, 0.04)'
-    },
-    midnight: {
-      bg0: '#000000', bg1: '#0a0d14', bg2: '#000000',
-      glow1: '#38bdf8', glow2: '#818cf8',
-      accent: '#7dd3fc', badgeText: '#e0f2fe',
-      cardBorder: 'rgba(255, 255, 255, 0.12)',
-      grid: 'rgba(255, 255, 255, 0.03)'
-    }
-  };
-
-  const t = themes[theme] || themes.cyber;
-
-  // Font sizing & text line calculation
-  const titleChars = rawTitle.length;
-  let titleFontSize = 54;
-  let titleLineHeight = 64;
-  let maxChars = 30;
-
-  if (titleChars > 70) {
-    titleFontSize = 38;
-    titleLineHeight = 48;
-    maxChars = 44;
-  } else if (titleChars > 35) {
-    titleFontSize = 46;
-    titleLineHeight = 56;
-    maxChars = 34;
-  }
-
-  const titleLines = wrapText(rawTitle, maxChars, 3);
+  const titleLines = wrapText(rawTitle, 32, 3);
   const subtitleLines = wrapText(rawSubtitle, 52, 2);
 
-  const isAscii = /^[\x00-\x7F]*$/.test(rawTitle);
-  const letterSpacingAttr = isAscii ? ' letter-spacing="-0.03em"' : '';
-
-  // SVG text blocks
   const titleSvg = titleLines.map((line, idx) =>
-    `<text x="0" y="${idx * titleLineHeight}" fill="#ffffff" font-family="Mukta, Roboto, sans-serif" font-size="${titleFontSize}" font-weight="700"${letterSpacingAttr}>${escapeXml(line)}</text>`
+    `<text x="0" y="${idx * 60}" fill="#ffffff" font-family="Mukta, Roboto, sans-serif" font-size="48" font-weight="700">${escapeXml(line)}</text>`
   ).join('\n        ');
 
-  const subtitleStartY = (titleLines.length * titleLineHeight) + 12;
+  const subtitleStartY = (titleLines.length * 60) + 16;
   const subtitleSvg = subtitleLines.map((line, idx) =>
     `<text x="0" y="${subtitleStartY + (idx * 30)}" fill="#94a3b8" font-family="Mukta, Roboto, sans-serif" font-size="22" font-weight="500">${escapeXml(line)}</text>`
   ).join('\n        ');
 
-  return `
-<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  return `<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="${t.bg0}" />
-      <stop offset="50%" stop-color="${t.bg1}" />
-      <stop offset="100%" stop-color="${t.bg2}" />
+      <stop offset="0%" stop-color="#030712" />
+      <stop offset="50%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
     </linearGradient>
-    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="${t.glow1}" />
-      <stop offset="100%" stop-color="${t.glow2}" />
+    <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#38bdf8" />
     </linearGradient>
-    <pattern id="gridPattern" width="48" height="48" patternUnits="userSpaceOnUse">
-      <path d="M 48 0 L 0 0 0 48" fill="none" stroke="${t.grid}" stroke-width="1.2" />
-    </pattern>
-    <filter id="orbBlur" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="95" />
-    </filter>
   </defs>
-
-  <!-- Background Base & Grid -->
   <rect width="1200" height="630" fill="url(#bgGrad)" />
-  <rect width="1200" height="630" fill="url(#gridPattern)" />
-
-  <!-- Atmospheric Glow Orbs -->
-  <circle cx="1080" cy="110" r="280" fill="${t.glow1}" opacity="0.28" filter="url(#orbBlur)" />
-  <circle cx="120" cy="540" r="260" fill="${t.glow2}" opacity="0.22" filter="url(#orbBlur)" />
-
-  <!-- Outer Glass Frame -->
-  <rect x="32" y="32" width="1136" height="566" rx="28" fill="rgba(255, 255, 255, 0.015)" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1.5" />
-
-  <!-- Top Brand Header -->
-  <g transform="translate(80, 92)">
-    <!-- Icon Container -->
-    <rect width="50" height="50" rx="14" fill="url(#glowGrad)" />
-    <path d="M27 12L16 27h9l-2 15 13-18h-9l2-12z" fill="#ffffff" />
-    <!-- Brand Title -->
-    <text x="66" y="33" fill="#ffffff" font-family="Roboto, sans-serif" font-size="24" font-weight="800" letter-spacing="-0.02em">${escapeXml(brand)}</text>
-    <circle cx="${66 + Math.round(brand.length * 14.5)}" cy="27" r="3.5" fill="${t.accent}" />
-    <text x="${80 + Math.round(brand.length * 14.5)}" y="33" fill="#64748b" font-family="Roboto, sans-serif" font-size="15" font-weight="600">Edge Image API</text>
+  <rect x="32" y="32" width="1136" height="566" rx="24" fill="rgba(255, 255, 255, 0.02)" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1.5" />
+  <g transform="translate(80, 90)">
+    <rect width="42" height="42" rx="10" fill="url(#brandGrad)" />
+    <text x="56" y="28" fill="#ffffff" font-family="Roboto, sans-serif" font-size="22" font-weight="800">${escapeXml(brand)}</text>
   </g>
-
-  <!-- Pill Badge -->
-  <g transform="translate(80, 172)">
-    <rect width="${Math.max(eBadge.length * 10.5 + 44, 180)}" height="36" rx="18" fill="rgba(15, 23, 42, 0.85)" stroke="${t.cardBorder}" stroke-width="1.2" />
-    <circle cx="18" cy="18" r="4.5" fill="${t.accent}" />
-    <text x="32" y="23" fill="${t.badgeText}" font-family="Mukta, Roboto, sans-serif" font-size="13" font-weight="700">${eBadge}</text>
+  <g transform="translate(80, 160)">
+    <rect width="${Math.max(eBadge.length * 10.5 + 32, 140)}" height="32" rx="16" fill="rgba(15, 23, 42, 0.85)" stroke="rgba(56, 189, 248, 0.3)" stroke-width="1.2" />
+    <circle cx="16" cy="16" r="4" fill="#38bdf8" />
+    <text x="28" y="21" fill="#bae6fd" font-family="Mukta, Roboto, sans-serif" font-size="13" font-weight="700">${eBadge}</text>
   </g>
-
-  <!-- Title & Subtitle Container -->
-  <g transform="translate(80, 275)">
+  <g transform="translate(80, 260)">
     ${titleSvg}
     ${subtitleSvg}
   </g>
-
-  <!-- Bottom Metadata Footer -->
-  <g transform="translate(80, 525)">
+  <g transform="translate(80, 530)">
     <line x1="0" y1="0" x2="1040" y2="0" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1" />
-    <text x="0" y="34" fill="#64748b" font-family="Roboto, sans-serif" font-size="12" font-weight="600" letter-spacing="0.08em">HIGH-RESOLUTION OPEN GRAPH SOCIAL PREVIEW</text>
-    <text x="1040" y="34" fill="${t.accent}" font-family="Roboto, sans-serif" font-size="14" font-weight="700" text-anchor="end">${escapeXml(footerDomain)}</text>
+    <text x="0" y="32" fill="#64748b" font-family="Roboto, sans-serif" font-size="13" font-weight="600">OPEN GRAPH SOCIAL PREVIEW</text>
+    <text x="1040" y="32" fill="#38bdf8" font-family="Roboto, sans-serif" font-size="14" font-weight="700" text-anchor="end">${escapeXml(footerDomain)}</text>
   </g>
-</svg>
-`.trim();
+</svg>`.trim();
 }
 
 export default async function handler(req, res) {
@@ -440,12 +356,19 @@ export default async function handler(req, res) {
     // Supports /candidate/:slug, /constituency/:id, /district/:slug, /party/:slug, /palika/:id,
     // /province/:slug, /province-assembly/:slug, /home, /federal-election-*, /local-election-*,
     // /parties, /districts, /provinces, /samanupatik, /by-elections, /records-*, etc.
+    if (rawPath.startsWith('local/palika/')) {
+      rawPath = rawPath.replace('local/palika/', 'palika/');
+      const updatedParts = rawPath.split('/').filter(Boolean);
+      folder = updatedParts[0] || '';
+      slug = updatedParts.slice(1).join('/');
+    }
+
     const isElectionFolder = ['candidate', 'constituency', 'district', 'party', 'palika', 'province', 'province-assembly', 'election'].includes(folder);
     const isElectionStaticSlug = [
       'home', 'parties', 'districts', 'provinces', 'vips', 'samanupatik', 'by-elections', 'records'
     ].includes(rawPath) || rawPath.startsWith('federal-election') || rawPath.startsWith('local-election') || rawPath.startsWith('province-election') || rawPath.startsWith('records-');
 
-    if (!targetUrl && rawPath && rawPath !== 'api' && (isTopNepaliHost || isElectionFolder || isElectionStaticSlug)) {
+    if (!targetUrl && rawPath && rawPath !== 'api' && (isElectionFolder || isElectionStaticSlug)) {
       const upstreamSlug = folder === 'election' ? `candidate/${slug}` : rawPath;
 
       const forwardParams = new URLSearchParams();
