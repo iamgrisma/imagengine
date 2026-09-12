@@ -10,10 +10,7 @@
     }
   },
   "rewrites": [
-    { "source": "/raw/(.*)", "destination": "/api" },
-    { "source": "/p/(.*)", "destination": "/api" },
-    { "source": "/(.*)\\.(webp|png|jpg|jpeg)", "destination": "/api?path=$1&format=$2" },
-    { "source": "/(.*)", "destination": "/api?path=$1" }
+    { "source": "/(.*)", "destination": "/api" }
   ],
   "headers": [
     {
