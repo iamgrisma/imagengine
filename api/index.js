@@ -490,19 +490,10 @@ export default async function handler(req, res) {
       }
 
       if (!fetchResult.ok) {
-        if (fetchResult.status === 403) {
-          return res.status(403).json({ error: fetchResult.error });
-        }
-        // Graceful fallback to dynamic card if title, slug, or rawPath is available and error is 404/5xx
-        if (query.title || slug || rawPath) {
-          const fallbackTitle = query.title || (slug || rawPath).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-          const fallbackBadge = query.badge || (folder ? folder.toUpperCase() : (isTopNepaliHost ? 'ELECTION NEPAL' : 'Open Graph Ready'));
-          svgContent = buildDefaultSvg(fallbackTitle, query.subtitle, fallbackBadge, query.theme, brandName, footerDomain);
-        } else {
-          return res.status(fetchResult.status || 502).json({
-            error: fetchResult.error || `Upstream error fetching SVG (Status ${fetchResult.status})`
-          });
-        }
+        return res.status(fetchResult.status || 404).json({
+          error: fetchResult.error || 'Image Not Found',
+          status: fetchResult.status || 404
+        });
       } else {
         svgContent = await fetchResult.response.text();
       }
@@ -514,33 +505,20 @@ export default async function handler(req, res) {
         svgContent = raw;
       }
     }
-    // 4. Built-in Dynamic Card (?title=... or clean :slug)
-    else if (query.title || slug || rawPath) {
-      const effectiveTitle = query.title || (slug || rawPath).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      const effectiveBadge = query.badge || (folder ? folder.toUpperCase() : (isTopNepaliHost ? 'ELECTION NEPAL' : 'Open Graph Ready'));
+    // 4. Built-in Dynamic Card (explicit ?title= query only)
+    else if (query.title) {
+      const effectiveTitle = query.title;
+      const effectiveBadge = query.badge || (isTopNepaliHost ? 'ELECTION NEPAL' : 'Open Graph Ready');
       svgContent = buildDefaultSvg(effectiveTitle, query.subtitle, effectiveBadge, query.theme, brandName, footerDomain);
     }
-    // 5. Default Demonstration Card
+    // 5. Unknown route or missing image
     else {
-      svgContent = buildDefaultSvg(
-        isTopNepaliHost ? 'Election Nepal' : 'ImageEngine API',
-        isTopNepaliHost ? 'Universal Open Graph Image Service' : 'Universal SVG to Raster Edge Generator',
-        isTopNepaliHost ? 'TopNepali Brand' : 'Ready for WhatsApp & Social Cards',
-        query.theme,
-        brandName,
-        footerDomain
-      );
+      return res.status(404).json({ error: 'Image Not Found', status: 404 });
     }
 
     const isValidSvg = svgContent && (svgContent.includes('<svg ') || svgContent.includes('<svg>') || svgContent.includes('<svg\n') || svgContent.includes('<svg\r'));
     if (!isValidSvg) {
-      if (query.title || slug || rawPath) {
-        const fallbackTitle = query.title || (slug || rawPath).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        const fallbackBadge = query.badge || (folder ? folder.toUpperCase() : (isTopNepaliHost ? 'ELECTION NEPAL' : 'Open Graph Ready'));
-        svgContent = buildDefaultSvg(fallbackTitle, query.subtitle, fallbackBadge, query.theme, brandName, footerDomain);
-      } else {
-        return res.status(400).json({ error: 'Invalid or missing SVG payload' });
-      }
+      return res.status(404).json({ error: 'Invalid or missing SVG payload', status: 404 });
     }
 
     // Payload size safeguard to prevent memory abuse
