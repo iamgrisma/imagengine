@@ -370,12 +370,17 @@ export default async function handler(req, res) {
     if (extMatch) {
       if (!urlFormat) urlFormat = extMatch[1].toLowerCase();
       rawPath = pathname.slice(1, -extMatch[0].length);
+    } else if (pathname && pathname !== '/' && pathname !== '/api') {
+      rawPath = pathname.replace(/^\/+/, '');
+      if (!urlFormat) urlFormat = 'webp';
     }
   } else if (!urlFormat) {
     const extMatch = rawPath.match(/\.(png|webp|jpg|jpeg)$/i);
     if (extMatch) {
       urlFormat = extMatch[1].toLowerCase();
       rawPath = rawPath.slice(0, -extMatch[0].length);
+    } else {
+      urlFormat = 'webp';
     }
   }
 
@@ -398,15 +403,15 @@ export default async function handler(req, res) {
   const brandName = isTopNepaliHost ? 'TopNepali' : 'ImageEngine';
   const footerDomain = isTopNepaliHost ? 'election.topnepali.com' : 'imagengine.grisma.info.np';
 
-  // If user opens /api in browser without parameters, redirect to documentation
-  const isHtml = req.headers.accept && req.headers.accept.includes('text/html');
+  // If request arrives without parameters, return lightweight JSON status
   const hasParams = query.url || query.title || query.svg || slug || rawPath;
-  if (isHtml && !hasParams && req.method === 'GET') {
-    if (typeof res.redirect === 'function') {
-      return res.redirect(302, '/docs');
-    }
-    res.writeHead(302, { Location: '/docs' });
-    return res.end();
+  if (!hasParams && req.method === 'GET') {
+    return res.status(200).json({
+      service: 'TopNepali Edge Image Engine',
+      status: 'active',
+      defaultFormat: 'webp',
+      allowedDomains: ALLOWED_ROOT_DOMAINS
+    });
   }
 
   try {
@@ -549,7 +554,7 @@ export default async function handler(req, res) {
       const extMatch = req.url.split('?')[0].match(/\.(png|webp|jpg|jpeg)$/i);
       if (extMatch) format = extMatch[1].toLowerCase();
     }
-    if (!format) format = 'png';
+    if (!format) format = 'webp';
     const quality = Math.min(Math.max(parseInt(query.quality, 10) || 85, 10), 100);
 
     // Load static font files & dirs (Mukta for Devanagari & Latin, Roboto)
