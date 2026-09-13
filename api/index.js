@@ -62,8 +62,18 @@ export default async function handler(req, res) {
 
   const query = req.query || {};
 
+  // Parse incoming path from Vercel rewrite or URL
+  const rawPath = req.headers['x-matched-path'] || req.url || '';
+  const [pathname, searchStr] = rawPath.split('?');
+  const cleanPath = pathname.replace(/^\/+/, '').replace(/\/+$/, '');
+
+  // Favicon ignore
+  if (cleanPath === 'favicon.ico') {
+    return res.status(204).end();
+  }
+
   // Simple service health check
-  if (req.method === 'GET' && !query.url && (req.url === '/' || req.url === '/api' || query.health)) {
+  if (req.method === 'GET' && !query.url && (cleanPath === '' || cleanPath === 'api' || query.health)) {
     return res.status(200).json({
       service: 'ImageEngine',
       status: 'active',
@@ -72,9 +82,35 @@ export default async function handler(req, res) {
     });
   }
 
-  // 1. Resolve SVG content
+  // 1. Resolve Target URL and Format
   let svgContent = '';
   let targetUrl = query.url;
+
+  // Detect requested output format from extension (.webp, .png, .jpg, .jpeg) or query.format
+  const extMatch = cleanPath.match(/\.(webp|png|jpe?g)$/i);
+  const requestedExt = (extMatch ? extMatch[1] : (query.format || 'webp')).toLowerCase().replace('jpeg', 'jpg');
+
+  // Strip extension to get clean route slug
+  let routeSlug = cleanPath.replace(/\.(webp|png|jpe?g|svg)$/i, '');
+
+  if (!targetUrl && req.method === 'GET' && routeSlug && routeSlug !== 'api') {
+    // If routeSlug is 'og', it was requested as /og.webp (fallback to home)
+    if (routeSlug === 'og') {
+      routeSlug = 'home';
+    }
+    // Normalize: ensure it maps to upstream /og/:slug.svg
+    const upstreamSlug = routeSlug.startsWith('og/') ? routeSlug : `og/${routeSlug}`;
+
+    // Forward any query parameters (such as year=2079, locale=ne)
+    const forwardParams = new URLSearchParams();
+    for (const [key, val] of Object.entries(query)) {
+      if (key !== 'url' && key !== 'format') {
+        forwardParams.set(key, val);
+      }
+    }
+    const forwardQuery = forwardParams.toString() ? `?${forwardParams.toString()}` : '';
+    targetUrl = `https://election.topnepali.com/${upstreamSlug}.svg${forwardQuery}`;
+  }
 
   if (targetUrl) {
     if (!isAllowedUrl(targetUrl)) {
@@ -115,17 +151,28 @@ export default async function handler(req, res) {
     });
 
     const pngBuffer = resvg.render().asPng();
-    const webpBuffer = await sharp(pngBuffer).webp({ quality: 85 }).toBuffer();
+    let outputBuffer = pngBuffer;
+    let contentType = 'image/png';
+
+    if (requestedExt === 'webp') {
+      outputBuffer = await sharp(pngBuffer).webp({ quality: 85 }).toBuffer();
+      contentType = 'image/webp';
+    } else if (requestedExt === 'jpg' || requestedExt === 'jpeg') {
+      outputBuffer = await sharp(pngBuffer).jpeg({ quality: 85 }).toBuffer();
+      contentType = 'image/jpeg';
+    }
+
+    const filename = `${routeSlug ? path.basename(routeSlug) : 'og-image'}.${requestedExt}`;
 
     // 1-Year CDN Cache Headers
-    res.setHeader('Content-Type', 'image/webp');
-    res.setHeader('Content-Length', webpBuffer.length);
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Length', outputBuffer.length);
     res.setHeader('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
     res.setHeader('CDN-Cache-Control', 'public, max-age=31536000, immutable');
     res.setHeader('Cloudflare-CDN-Cache-Control', 'public, max-age=31536000, immutable');
-    res.setHeader('Content-Disposition', 'inline; filename="og-image.webp"');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
 
-    return res.status(200).send(webpBuffer);
+    return res.status(200).send(outputBuffer);
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Image rasterization failed', status: 500 });
   }
