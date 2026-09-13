@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+process.env.FONTCONFIG_PATH = path.join(__dirname, 'fonts');
 
 // Cache fonts in memory across lambda invocations
 let cachedFonts = null;
@@ -142,9 +143,11 @@ export default async function handler(req, res) {
   }
 
   try {
+    const useSharp = req.headers['x-engine'] === 'sharp' || query.engine === 'sharp' || (req.url && req.url.includes('engine=sharp'));
     let pngBuffer;
-    if (query.engine === 'sharp') {
+    if (useSharp) {
       pngBuffer = await sharp(Buffer.from(svgContent), { density: 150 }).resize(1200).png().toBuffer();
+      res.setHeader('X-Render-Engine', 'sharp');
     } else {
       const fontFiles = loadFonts();
       const resvg = new Resvg(svgContent, {
@@ -154,6 +157,7 @@ export default async function handler(req, res) {
           : { loadSystemFonts: true }
       });
       pngBuffer = resvg.render().asPng();
+      res.setHeader('X-Render-Engine', 'resvg');
     }
     let outputBuffer = pngBuffer;
     let contentType = 'image/png';
