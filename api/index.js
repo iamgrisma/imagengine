@@ -142,15 +142,19 @@ export default async function handler(req, res) {
   }
 
   try {
-    const fontFiles = loadFonts();
-    const resvg = new Resvg(svgContent, {
-      fitTo: { mode: 'width', value: 1200 },
-      font: fontFiles.length
-        ? { fontFiles, defaultFontFamily: 'Mukta', sansSerifFamily: 'Mukta', loadSystemFonts: false }
-        : { loadSystemFonts: true }
-    });
-
-    const pngBuffer = resvg.render().asPng();
+    let pngBuffer;
+    if (query.engine === 'sharp') {
+      pngBuffer = await sharp(Buffer.from(svgContent), { density: 150 }).resize(1200).png().toBuffer();
+    } else {
+      const fontFiles = loadFonts();
+      const resvg = new Resvg(svgContent, {
+        fitTo: { mode: 'width', value: 1200 },
+        font: fontFiles.length
+          ? { fontFiles, defaultFontFamily: 'Mukta', sansSerifFamily: 'Mukta', loadSystemFonts: false }
+          : { loadSystemFonts: true }
+      });
+      pngBuffer = resvg.render().asPng();
+    }
     let outputBuffer = pngBuffer;
     let contentType = 'image/png';
 
