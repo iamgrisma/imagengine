@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 process.env.FONTCONFIG_PATH = path.join(__dirname, 'fonts');
+process.env.FONTCONFIG_FILE = path.join(__dirname, 'fonts', 'fonts.conf');
 
 // Cache fonts in memory across lambda invocations
 let cachedFonts = null;
@@ -78,6 +79,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       service: 'ImageEngine',
       status: 'active',
+      defaultEngine: 'sharp',
       defaultFormat: 'webp',
       fonts: loadFonts().map(f => path.basename(f))
     });
@@ -143,12 +145,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    const useSharp = req.headers['x-engine'] === 'sharp' || query.engine === 'sharp' || (req.url && req.url.includes('engine=sharp'));
-    let pngBuffer;
-    if (useSharp) {
-      pngBuffer = await sharp(Buffer.from(svgContent), { density: 150 }).resize(1200).png().toBuffer();
-      res.setHeader('X-Render-Engine', 'sharp');
-    } else {
+    const useResvg = req.headers['x-engine'] === 'resvg' || query.engine === 'resvg' || (req.url && req.url.includes('engine=resvg'));
+    let outputBuffer;
+    let contentType = 'image/webp';
+
+    if (useResvg) {
       const fontFiles = loadFonts();
       const resvg = new Resvg(svgContent, {
         fitTo: { mode: 'width', value: 1200 },
@@ -156,18 +157,34 @@ export default async function handler(req, res) {
           ? { fontFiles, defaultFontFamily: 'Mukta', sansSerifFamily: 'Mukta', loadSystemFonts: false }
           : { loadSystemFonts: true }
       });
-      pngBuffer = resvg.render().asPng();
+      const pngBuffer = resvg.render().asPng();
       res.setHeader('X-Render-Engine', 'resvg');
-    }
-    let outputBuffer = pngBuffer;
-    let contentType = 'image/png';
 
-    if (requestedExt === 'webp') {
-      outputBuffer = await sharp(pngBuffer).webp({ quality: 85 }).toBuffer();
-      contentType = 'image/webp';
-    } else if (requestedExt === 'jpg' || requestedExt === 'jpeg') {
-      outputBuffer = await sharp(pngBuffer).jpeg({ quality: 85 }).toBuffer();
-      contentType = 'image/jpeg';
+      if (requestedExt === 'webp') {
+        outputBuffer = await sharp(pngBuffer).webp({ quality: 85 }).toBuffer();
+        contentType = 'image/webp';
+      } else if (requestedExt === 'jpg' || requestedExt === 'jpeg') {
+        outputBuffer = await sharp(pngBuffer).jpeg({ quality: 85 }).toBuffer();
+        contentType = 'image/jpeg';
+      } else {
+        outputBuffer = pngBuffer;
+        contentType = 'image/png';
+      }
+    } else {
+      // Default: Sharp with Pango + HarfBuzz for flawless Devanagari shaping & embedded images
+      res.setHeader('X-Render-Engine', 'sharp');
+      const pipeline = sharp(Buffer.from(svgContent), { density: 150 }).resize(1200);
+
+      if (requestedExt === 'webp') {
+        outputBuffer = await pipeline.webp({ quality: 85 }).toBuffer();
+        contentType = 'image/webp';
+      } else if (requestedExt === 'jpg' || requestedExt === 'jpeg') {
+        outputBuffer = await pipeline.jpeg({ quality: 85 }).toBuffer();
+        contentType = 'image/jpeg';
+      } else {
+        outputBuffer = await pipeline.png().toBuffer();
+        contentType = 'image/png';
+      }
     }
 
     const filename = `${routeSlug ? path.basename(routeSlug) : 'og-image'}.${requestedExt}`;
