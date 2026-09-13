@@ -34,12 +34,9 @@ function loadFonts() {
   return files;
 }
 
-// Domain whitelist to prevent SSRF abuse
+// Domain whitelist: Strictly restricted to official TopNepali domain
 const ALLOWED_ROOT_DOMAINS = [
-  'topnepali.com',
-  'grisma.com.np',
-  'grisma.info.np',
-  'vercel.app'
+  'topnepali.com'
 ];
 
 function isAllowedUrl(urlStr) {
@@ -55,11 +52,11 @@ function isAllowedUrl(urlStr) {
 }
 
 export default async function handler(req, res) {
-  // CORS
+  // CORS: Allow GET and HEAD for public CDN and client latency measuring
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match');
-  res.setHeader('Access-Control-Expose-Headers', 'ETag, Cache-Control');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match, x-engine-key');
+  res.setHeader('Access-Control-Expose-Headers', 'ETag, Cache-Control, X-Render-Engine');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const query = req.query || {};
@@ -133,7 +130,12 @@ export default async function handler(req, res) {
       return res.status(502).json({ error: `Failed to fetch upstream SVG: ${err.message}`, status: 502 });
     }
   } else if (req.method === 'POST') {
-    // Direct POST SVG payload
+    // Direct POST is strictly restricted to authenticated internal callers
+    const authKey = req.headers['x-engine-key'] || req.headers['authorization'];
+    const secretKey = process.env.ENGINE_SECRET_KEY || 'topnepali-internal-2082';
+    if (!authKey || (authKey !== secretKey && authKey !== `Bearer ${secretKey}`)) {
+      return res.status(403).json({ error: 'Forbidden: Direct SVG POST is restricted', status: 403 });
+    }
     svgContent = typeof req.body === 'string' ? req.body : (req.body?.svg || '');
   } else {
     // Any unknown route without a valid SVG URL -> 404
@@ -142,6 +144,14 @@ export default async function handler(req, res) {
 
   if (!svgContent || !svgContent.includes('<svg')) {
     return res.status(404).json({ error: 'Invalid or missing SVG payload', status: 404 });
+  }
+
+  // Safety checks: XML entity restriction and size limit (max 500KB)
+  if (svgContent.length > 500000) {
+    return res.status(413).json({ error: 'Payload Too Large: SVG exceeds 500KB limit', status: 413 });
+  }
+  if (svgContent.includes('<!ENTITY') || svgContent.includes('SYSTEM "')) {
+    return res.status(400).json({ error: 'Bad Request: External XML entities are forbidden', status: 400 });
   }
 
   try {
