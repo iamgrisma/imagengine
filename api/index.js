@@ -183,6 +183,8 @@ export default async function handler(req, res) {
 
   function sendError(status, message) {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('CDN-Cache-Control', 'no-store');
+    res.setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
     return res.status(status).json({ error: message, status });
   }
 
