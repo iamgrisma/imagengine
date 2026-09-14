@@ -8,25 +8,15 @@
 (function() {
   'use strict';
 
-  var currentScript = document.currentScript || (function() {
-    var scripts = document.getElementsByTagName('script');
-    return scripts[scripts.length - 1];
+  var script = document.currentScript || (function() {
+    var s = document.getElementsByTagName('script');
+    return s[s.length - 1];
   })();
 
-  var tenant = currentScript ? currentScript.getAttribute('data-tenant') : '';
-  var subdomain = currentScript ? (currentScript.getAttribute('data-subdomain') || 'main') : 'main';
-
-  // Smart CDN host detection: supports img.grisma.info.np, img.topnepali.com, or custom white-label CNAME
-  var scriptSrc = currentScript ? (currentScript.getAttribute('src') || '') : '';
-  var defaultCdn = 'https://img.grisma.info.np';
-  if (scriptSrc.indexOf('img.topnepali.com') !== -1) {
-    defaultCdn = 'https://img.topnepali.com';
-  } else if (scriptSrc.indexOf('img.grisma.info.np') !== -1) {
-    defaultCdn = 'https://img.grisma.info.np';
-  }
-
-  var cdnHost = currentScript ? (currentScript.getAttribute('data-cdn') || defaultCdn) : defaultCdn;
-  var autoAvatar = currentScript ? (currentScript.getAttribute('data-avatar') === 'true') : false;
+  var tenant = script ? script.getAttribute('data-tenant') : '';
+  var subdomain = script ? (script.getAttribute('data-subdomain') || 'main') : 'main';
+  var cdnHost = script ? (script.getAttribute('data-cdn') || 'https://img.grisma.info.np') : 'https://img.grisma.info.np';
+  var autoAvatar = script ? (script.getAttribute('data-avatar') === 'true') : false;
 
   if (!tenant) return;
 
@@ -34,7 +24,7 @@
     if (!img || img.dataset.engineProcessed || img.dataset.noEngine) return;
     var originalSrc = img.getAttribute('src');
     if (!originalSrc || originalSrc.indexOf('data:') === 0 || originalSrc.indexOf('blob:') === 0) return;
-    if (originalSrc.indexOf('img.grisma.info.np') !== -1 || originalSrc.indexOf('img.topnepali.com') !== -1) return;
+    if (originalSrc.indexOf(cdnHost) !== -1) return;
 
     img.dataset.originSrc = originalSrc;
     img.dataset.engineProcessed = 'true';
@@ -42,8 +32,7 @@
     var cleanPath = originalSrc;
     if (cleanPath.indexOf('http://') === 0 || cleanPath.indexOf('https://') === 0) {
       try {
-        var u = new URL(cleanPath);
-        cleanPath = u.pathname;
+        cleanPath = new URL(cleanPath).pathname;
       } catch (e) {
         return;
       }
