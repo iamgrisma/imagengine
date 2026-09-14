@@ -60,8 +60,8 @@ function isRateLimitExceeded(tenantKey, dailyLimit = 1000) {
 /**
  * Resolves request path to origin target URL dynamically
  */
-function resolveUpstream(cleanPath, query) {
-  const segments = cleanPath.split('/').filter(Boolean);
+function resolveUpstream(pathWithoutExt, query) {
+  const segments = pathWithoutExt.split('/').filter(Boolean);
   const tenantKey = (segments[0] || '').toLowerCase();
   const tenant = TENANTS[tenantKey];
 
@@ -175,7 +175,7 @@ export default async function handler(req, res) {
     }
   } else {
     // Dynamic namespaced path resolution
-    const resolved = resolveUpstream(cleanPath, query);
+    const resolved = resolveUpstream(pathWithoutExt, query);
     if (!resolved) {
       return sendError(404, 'Image route not found or unknown tenant namespace');
     }
