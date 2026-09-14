@@ -34,16 +34,20 @@ function loadFonts() {
   return files;
 }
 
-// Domain whitelist: Strictly restricted to official TopNepali domain
-const ALLOWED_ROOT_DOMAINS = [
-  'topnepali.com'
-];
+// Multi-Tenant Allowed Organizations & Root Domains
+const ORG_REGISTRY = {
+  tn: 'topnepali.com',
+  ecn: 'election.gov.np',
+  tnnp: 'topnepali.com.np',
+};
+
+const ALLOWED_ROOT_DOMAINS = Object.values(ORG_REGISTRY);
 
 function isAllowedUrl(urlStr) {
   if (!urlStr || typeof urlStr !== 'string') return false;
   try {
     const parsed = new URL(urlStr.trim());
-    if (parsed.protocol !== 'https:') return false;
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
     const host = parsed.hostname.toLowerCase();
     return ALLOWED_ROOT_DOMAINS.some(root => host === root || host.endsWith('.' + root));
   } catch {
@@ -56,7 +60,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match, x-engine-key');
-  res.setHeader('Access-Control-Expose-Headers', 'ETag, Cache-Control, X-Render-Engine');
+  res.setHeader('Access-Control-Expose-Headers', 'ETag, Cache-Control, X-Render-Engine, X-Origin-Host');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const query = req.query || {};
@@ -78,38 +82,9 @@ export default async function handler(req, res) {
       status: 'active',
       defaultEngine: 'sharp',
       defaultFormat: 'webp',
+      organizations: Object.keys(ORG_REGISTRY),
       fonts: loadFonts().map(f => path.basename(f))
     });
-  }
-
-  // 1. Resolve Target URL and Format
-  let svgContent = '';
-  let targetUrl = query.url;
-
-  // Detect requested output format from extension (.webp, .png, .jpg, .jpeg) or query.format
-  const extMatch = cleanPath.match(/\.(webp|png|jpe?g)$/i);
-  const requestedExt = (extMatch ? extMatch[1] : (query.format || 'webp')).toLowerCase().replace('jpeg', 'jpg');
-
-  // Strip extension to get clean route slug
-  let routeSlug = cleanPath.replace(/\.(webp|png|jpe?g|svg)$/i, '');
-
-  if (!targetUrl && req.method === 'GET' && routeSlug && routeSlug !== 'api') {
-    // If routeSlug is 'og', it was requested as /og.webp (fallback to home)
-    if (routeSlug === 'og') {
-      routeSlug = 'home';
-    }
-    // Normalize: ensure it maps to upstream /og/:slug.svg
-    const upstreamSlug = routeSlug.startsWith('og/') ? routeSlug : `og/${routeSlug}`;
-
-    // Forward any query parameters (such as year=2079, locale=ne)
-    const forwardParams = new URLSearchParams();
-    for (const [key, val] of Object.entries(query)) {
-      if (key !== 'url' && key !== 'format') {
-        forwardParams.set(key, val);
-      }
-    }
-    const forwardQuery = forwardParams.toString() ? `?${forwardParams.toString()}` : '';
-    targetUrl = `https://election.topnepali.com/${upstreamSlug}.svg${forwardQuery}`;
   }
 
   function sendError(status, message) {
@@ -117,6 +92,85 @@ export default async function handler(req, res) {
     res.setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
     return res.status(status).json({ error: message, status });
   }
+
+  // Detect requested output format from extension (.webp, .png, .jpg, .jpeg) or query.format
+  const extMatch = cleanPath.match(/\.(webp|png|jpe?g)$/i);
+  const requestedExt = (extMatch ? extMatch[1] : (query.format || 'webp')).toLowerCase().replace('jpeg', 'jpg');
+
+  // Strip extension to get clean route slug
+  const pathWithoutExt = cleanPath.replace(/\.(webp|png|jpe?g|svg)$/i, '');
+
+  let targetUrl = query.url;
+  let originHost = '';
+  let isAvatarMode = false;
+  let orgKey = '';
+
+  // Forward any relevant query parameters (e.g. year=2079, locale=ne)
+  const forwardParams = new URLSearchParams();
+  for (const [key, val] of Object.entries(query)) {
+    if (key !== 'url' && key !== 'format' && key !== 'engine' && key !== 'w' && key !== 'h' && key !== 'avatar') {
+      forwardParams.set(key, val);
+    }
+  }
+  const forwardQuery = forwardParams.toString() ? `?${forwardParams.toString()}` : '';
+
+  if (!targetUrl && req.method === 'GET' && pathWithoutExt && pathWithoutExt !== 'api') {
+    const segments = pathWithoutExt.split('/').filter(Boolean);
+    const firstSegment = (segments[0] || '').toLowerCase();
+
+    if (ORG_REGISTRY[firstSegment]) {
+      // 1. Dynamic Namespaced Multi-Tenant Origin: /:org/:subdomain/:restPath*
+      orgKey = firstSegment;
+      const rootDomain = ORG_REGISTRY[orgKey];
+      const sub = (segments[1] || '').toLowerCase();
+      const restSegments = segments.slice(2);
+
+      // Auto-compute origin hostname dynamically (no manual config per subdomain!)
+      if (!sub || sub === 'main' || sub === 'www' || sub === '@') {
+        originHost = rootDomain;
+      } else {
+        originHost = `${sub}.${rootDomain}`;
+      }
+
+      const restPath = restSegments.join('/');
+
+      if (orgKey === 'ecn') {
+        // ECN Candidate photos & assets:
+        // Handles /ecn/result/Images/Candidate/335208.webp AND /ecn/result/candidate/335208.webp
+        isAvatarMode = true;
+        if (restPath.toLowerCase().startsWith('candidate/')) {
+          const candId = restPath.split('/')[1] || '';
+          targetUrl = `https://${originHost}/Images/Candidate/${candId}.jpg`;
+        } else if (restPath.toLowerCase().startsWith('images/candidate/')) {
+          targetUrl = `https://${originHost}/${restPath}.jpg`;
+        } else {
+          const hasExt = restPath.match(/\.(jpe?g|png|webp|gif|svg)$/i);
+          targetUrl = `https://${originHost}/${restPath}${hasExt ? '' : '.jpg'}`;
+        }
+      } else {
+        // TopNepali apps (election, news, constitution, etc.)
+        if (restPath.startsWith('og/')) {
+          targetUrl = `https://${originHost}/${restPath}.svg${forwardQuery}`;
+        } else if (restPath.match(/\.(svg|png|jpe?g|webp|gif)$/i)) {
+          targetUrl = `https://${originHost}/${restPath}${forwardQuery}`;
+        } else {
+          // Default clean slug to /og/:path.svg on that origin
+          targetUrl = `https://${originHost}/og/${restPath}.svg${forwardQuery}`;
+        }
+      }
+    } else {
+      // 2. Legacy backwards-compatible fallback (e.g. /candidate/sobita-gautam.webp)
+      orgKey = 'tn';
+      originHost = 'election.topnepali.com';
+      let routeSlug = pathWithoutExt;
+      if (routeSlug === 'og') routeSlug = 'home';
+      const upstreamSlug = routeSlug.startsWith('og/') ? routeSlug : `og/${routeSlug}`;
+      targetUrl = `https://${originHost}/${upstreamSlug}.svg${forwardQuery}`;
+    }
+  }
+
+  let svgContent = '';
+  let rasterBuffer = null;
 
   if (targetUrl) {
     if (!isAllowedUrl(targetUrl)) {
@@ -128,9 +182,18 @@ export default async function handler(req, res) {
       if (!upstream.ok) {
         return sendError(upstream.status || 404, `Upstream returned HTTP ${upstream.status}`);
       }
-      svgContent = await upstream.text();
+
+      const contentTypeHeader = (upstream.headers.get('content-type') || '').toLowerCase();
+      const isSvg = contentTypeHeader.includes('svg') || targetUrl.includes('.svg');
+
+      if (isSvg) {
+        svgContent = await upstream.text();
+      } else {
+        const arrayBuf = await upstream.arrayBuffer();
+        rasterBuffer = Buffer.from(arrayBuf);
+      }
     } catch (err) {
-      return sendError(502, `Failed to fetch upstream SVG: ${err.message}`);
+      return sendError(502, `Failed to fetch upstream asset: ${err.message}`);
     }
   } else if (req.method === 'POST') {
     // Direct POST is strictly restricted to authenticated internal callers
@@ -141,55 +204,88 @@ export default async function handler(req, res) {
     }
     svgContent = typeof req.body === 'string' ? req.body : (req.body?.svg || '');
   } else {
-    // Any unknown route without a valid SVG URL -> 404
     return sendError(404, 'Image Not Found');
   }
 
-  if (!svgContent || !svgContent.includes('<svg')) {
-    return sendError(404, 'Invalid or missing SVG payload');
-  }
-
-  // Safety checks: XML entity restriction and size limit (max 500KB)
-  if (svgContent.length > 500000) {
-    return sendError(413, 'Payload Too Large: SVG exceeds 500KB limit');
-  }
-  if (svgContent.includes('<!ENTITY') || svgContent.includes('SYSTEM "')) {
-    return sendError(400, 'Bad Request: External XML entities are forbidden');
-  }
-
   try {
-    const useResvg = req.headers['x-engine'] === 'resvg' || query.engine === 'resvg' || (req.url && req.url.includes('engine=resvg'));
     let outputBuffer;
     let contentType = 'image/webp';
 
-    if (useResvg) {
-      const fontFiles = loadFonts();
-      const resvg = new Resvg(svgContent, {
-        fitTo: { mode: 'width', value: 1200 },
-        font: fontFiles.length
-          ? { fontFiles, defaultFontFamily: 'Mukta', sansSerifFamily: 'Mukta', loadSystemFonts: false }
-          : { loadSystemFonts: true }
-      });
-      const pngBuffer = resvg.render().asPng();
-      res.setHeader('X-Render-Engine', 'resvg');
-
-      if (requestedExt === 'webp') {
-        outputBuffer = await sharp(pngBuffer).webp({ quality: 85 }).toBuffer();
-        contentType = 'image/webp';
-      } else if (requestedExt === 'jpg' || requestedExt === 'jpeg') {
-        outputBuffer = await sharp(pngBuffer).jpeg({ quality: 85 }).toBuffer();
-        contentType = 'image/jpeg';
-      } else {
-        outputBuffer = pngBuffer;
-        contentType = 'image/png';
+    if (svgContent) {
+      // SVG Processing Pipeline
+      if (!svgContent.includes('<svg')) {
+        return sendError(404, 'Invalid or missing SVG payload');
       }
-    } else {
-      // Default: Sharp with Pango + HarfBuzz for flawless Devanagari shaping & embedded images
-      res.setHeader('X-Render-Engine', 'sharp');
-      const pipeline = sharp(Buffer.from(svgContent), { density: 150 }).resize(1200);
+      if (svgContent.length > 500000) {
+        return sendError(413, 'Payload Too Large: SVG exceeds 500KB limit');
+      }
+      if (svgContent.includes('<!ENTITY') || svgContent.includes('SYSTEM "')) {
+        return sendError(400, 'Bad Request: External XML entities are forbidden');
+      }
+
+      const useResvg = req.headers['x-engine'] === 'resvg' || query.engine === 'resvg' || (req.url && req.url.includes('engine=resvg'));
+
+      if (useResvg) {
+        const fontFiles = loadFonts();
+        const resvg = new Resvg(svgContent, {
+          fitTo: { mode: 'width', value: 1200 },
+          font: fontFiles.length
+            ? { fontFiles, defaultFontFamily: 'Mukta', sansSerifFamily: 'Mukta', loadSystemFonts: false }
+            : { loadSystemFonts: true }
+        });
+        const pngBuffer = resvg.render().asPng();
+        res.setHeader('X-Render-Engine', 'resvg');
+
+        if (requestedExt === 'webp') {
+          outputBuffer = await sharp(pngBuffer).webp({ quality: 85 }).toBuffer();
+          contentType = 'image/webp';
+        } else if (requestedExt === 'jpg' || requestedExt === 'jpeg') {
+          outputBuffer = await sharp(pngBuffer).jpeg({ quality: 85 }).toBuffer();
+          contentType = 'image/jpeg';
+        } else {
+          outputBuffer = pngBuffer;
+          contentType = 'image/png';
+        }
+      } else {
+        // Sharp with Pango + HarfBuzz
+        res.setHeader('X-Render-Engine', 'sharp-svg');
+        const pipeline = sharp(Buffer.from(svgContent), { density: 150 }).resize(1200);
+
+        if (requestedExt === 'webp') {
+          outputBuffer = await pipeline.webp({ quality: 85 }).toBuffer();
+          contentType = 'image/webp';
+        } else if (requestedExt === 'jpg' || requestedExt === 'jpeg') {
+          outputBuffer = await pipeline.jpeg({ quality: 85 }).toBuffer();
+          contentType = 'image/jpeg';
+        } else {
+          outputBuffer = await pipeline.png().toBuffer();
+          contentType = 'image/png';
+        }
+      }
+    } else if (rasterBuffer) {
+      // Raster Image Pipeline (ECN candidate photos, JPG, PNG, etc.)
+      if (rasterBuffer.length < 50) {
+        return sendError(404, 'Empty or invalid image payload');
+      }
+
+      res.setHeader('X-Render-Engine', 'sharp-raster');
+      let pipeline = sharp(rasterBuffer);
+
+      const isAvatar = isAvatarMode || query.avatar === '1' || query.avatar === 'true';
+      const targetW = query.w ? parseInt(query.w, 10) : (isAvatar ? 256 : null);
+      const targetH = query.h ? parseInt(query.h, 10) : (isAvatar ? 256 : null);
+
+      if (targetW && targetH) {
+        pipeline = pipeline.resize(targetW, targetH, {
+          fit: 'cover',
+          position: isAvatar ? 'top' : 'center', // Face-crop for candidate portraits
+        });
+      } else if (targetW) {
+        pipeline = pipeline.resize(targetW);
+      }
 
       if (requestedExt === 'webp') {
-        outputBuffer = await pipeline.webp({ quality: 85 }).toBuffer();
+        outputBuffer = await pipeline.webp({ quality: 82 }).toBuffer();
         contentType = 'image/webp';
       } else if (requestedExt === 'jpg' || requestedExt === 'jpeg') {
         outputBuffer = await pipeline.jpeg({ quality: 85 }).toBuffer();
@@ -198,11 +294,16 @@ export default async function handler(req, res) {
         outputBuffer = await pipeline.png().toBuffer();
         contentType = 'image/png';
       }
+    } else {
+      return sendError(404, 'No asset content available');
     }
 
-    const filename = `${routeSlug ? path.basename(routeSlug) : 'og-image'}.${requestedExt}`;
+    const filename = `${pathWithoutExt ? path.basename(pathWithoutExt) : 'asset'}.${requestedExt}`;
 
     // 1-Year CDN Cache Headers
+    if (originHost) {
+      res.setHeader('X-Origin-Host', originHost);
+    }
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Length', outputBuffer.length);
     res.setHeader('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
