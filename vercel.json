@@ -14,10 +14,10 @@
     { "source": "/docs", "destination": "https://imagengine.grisma.info.np/docs", "permanent": false },
     { "source": "/integration", "destination": "https://imagengine.grisma.info.np/integration", "permanent": false },
     { "source": "/terms", "destination": "https://imagengine.grisma.info.np/terms", "permanent": false },
-    { "source": "/privacy", "destination": "https://imagengine.grisma.info.np/privacy", "permanent": false }
+    { "source": "/privacy", "destination": "https://imagengine.grisma.info.np/privacy", "permanent": false },
+    { "source": "/engine.js", "destination": "https://imagengine.grisma.info.np/engine.js", "permanent": true }
   ],
   "rewrites": [
-    { "source": "/engine.js", "destination": "/engine.js" },
     { "source": "/(.*)", "destination": "/api" }
   ],
   "headers": [
