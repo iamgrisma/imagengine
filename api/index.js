@@ -33,30 +33,68 @@ function isRateLimitExceeded(tenantKey, dailyLimit = 1000) {
 }
 
 /**
- * Universal upstream candidate resolver
- * Maps /{tenant}/{subdomain}/{...assetPath} or /{tenant}/{...assetPath}
- * to upstream candidates across SVG, JPG, PNG, and WebP
+ * Host-based tenant inference
+ * Enables direct requests like img.topnepali.com/abc-jpg.webp without /tn/ path prefix
  */
-function resolveUpstream(cleanPath, query) {
+function findTenantByHost(hostHeader) {
+  if (!hostHeader) return null;
+  const host = hostHeader.split(':')[0].toLowerCase();
+  // Exclude imagengine service host itself (gateway requires explicit tenant path)
+  if (host.startsWith('imagengine.')) return null;
+
+  for (const [key, config] of Object.entries(TENANTS)) {
+    if (host === config.domain || host.endsWith('.' + config.domain)) {
+      let originHost = host.replace(/^(img|image|images|cdn|assets)\./i, '');
+      if (!originHost.endsWith(config.domain)) {
+        originHost = config.domain;
+      }
+      return { tenantKey: key, tenant: config, originHost };
+    }
+  }
+  return null;
+}
+
+/**
+ * Universal upstream candidate resolver
+ * Maps /{tenant}/{subdomain}/{...assetPath} or /{tenant}/{...assetPath},
+ * or directly {...assetPath} when host header identifies tenant domain.
+ */
+function resolveUpstream(cleanPath, query, hostHeader = '') {
   const segments = cleanPath.split('/').filter(Boolean);
-  if (segments.length < 2) return null;
+  if (segments.length === 0) return null;
 
-  const tenantKey = segments[0].toLowerCase();
-  const tenant = TENANTS[tenantKey];
-  if (!tenant) return null;
-
+  let tenantKey = '';
+  let tenant = null;
   let originHost = '';
   let assetPath = '';
 
-  if (segments.length === 2) {
-    originHost = tenant.domain;
-    assetPath = segments[1];
+  const firstSeg = segments[0].toLowerCase();
+  if (TENANTS[firstSeg]) {
+    // Explicit tenant in path: /{tenant}/{subdomain}/{...assetPath} or /{tenant}/{...assetPath}
+    tenantKey = firstSeg;
+    tenant = TENANTS[tenantKey];
+
+    if (segments.length === 1) {
+      return null;
+    } else if (segments.length === 2) {
+      originHost = tenant.domain;
+      assetPath = segments[1];
+    } else {
+      const sub = segments[1].toLowerCase();
+      originHost = (!sub || sub === 'main' || sub === 'www' || sub === '@')
+        ? tenant.domain
+        : `${sub}.${tenant.domain}`;
+      assetPath = segments.slice(2).join('/');
+    }
   } else {
-    const sub = segments[1].toLowerCase();
-    originHost = (!sub || sub === 'main' || sub === 'www' || sub === '@')
-      ? tenant.domain
-      : `${sub}.${tenant.domain}`;
-    assetPath = segments.slice(2).join('/');
+    // Inferred tenant from host header (e.g. img.topnepali.com/abc-jpg.webp)
+    const inferred = findTenantByHost(hostHeader);
+    if (!inferred) return null;
+
+    tenantKey = inferred.tenantKey;
+    tenant = inferred.tenant;
+    originHost = inferred.originHost;
+    assetPath = segments.join('/');
   }
 
   // Check for preserved origin extension pattern (zero-probing direct origin match)
@@ -165,7 +203,8 @@ export default async function handler(req, res) {
     return res.status(status).json({ error: message, status });
   }
 
-  const resolved = resolveUpstream(cleanPath, query);
+  const hostHeader = req.headers['x-forwarded-host'] || req.headers.host || '';
+  const resolved = resolveUpstream(cleanPath, query, hostHeader);
   if (!resolved) {
     return sendError(404, 'Route not found or unregistered tenant namespace');
   }
