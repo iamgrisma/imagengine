@@ -107,6 +107,7 @@ function resolveUpstream(cleanPath, query = {}) {
     tenantKey,
     tenant,
     withoutExt: basePath,
+    origExt,
     requestedExt,
   };
 }
@@ -152,7 +153,7 @@ export default async function handler(req, res) {
     return sendError(404, 'Route not found or invalid format schema. Required: /{tenant}/[subdomain/]{path}-{origExt}.{targetExt}');
   }
 
-  const { originUrl, originHost, tenantKey, tenant, withoutExt } = resolved;
+  const { originUrl, originHost, tenantKey, tenant, withoutExt, origExt } = resolved;
 
   // Rate limiter check for throttled tenants
   if (tenant.rateLimit) {
@@ -208,19 +209,38 @@ export default async function handler(req, res) {
   const validPositions = ['top', 'center', 'bottom', 'left', 'right', 'entropy', 'attention'];
   const cropPos = validPositions.includes(query.position) ? query.position : (isAvatar ? 'top' : 'center');
 
-  // Fast direct pass-through for WebP sources when no dimensions or filters are altered
+  // Zero-compute direct edge pass-through when format is preserved without modifications
+  const origExtNorm = (origExt || '').replace('jpeg', 'jpg');
+  const isSameExt = (origExtNorm === requestedExt);
   const isWebpSource = sourceContentType.includes('webp') || originUrl.includes('.webp');
   const hasTransformModifications = targetW || targetH || isAvatar || query.q || query.quality || query.blur || query.sharpen;
-  if (rasterBuffer && !svgContent && requestedExt === 'webp' && isWebpSource && !hasTransformModifications) {
-    res.setHeader('X-Render-Engine', 'edge-passthrough');
-    res.setHeader('Content-Type', 'image/webp');
-    res.setHeader('Content-Length', rasterBuffer.length);
-    res.setHeader('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
-    res.setHeader('CDN-Cache-Control', 'public, max-age=31536000, immutable');
-    res.setHeader('Cloudflare-CDN-Cache-Control', 'public, max-age=31536000, immutable');
-    res.setHeader('Content-Disposition', `inline; filename="${path.basename(withoutExt)}.webp"`);
-    res.setHeader('X-Origin-Host', originHost);
-    return res.status(200).send(rasterBuffer);
+
+  if (!hasTransformModifications) {
+    if (svgContent && requestedExt === 'svg') {
+      res.setHeader('X-Render-Engine', 'edge-passthrough');
+      res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+      res.setHeader('Content-Length', Buffer.byteLength(svgContent));
+      res.setHeader('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
+      res.setHeader('CDN-Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('Cloudflare-CDN-Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('Content-Disposition', `inline; filename="${path.basename(withoutExt)}.svg"`);
+      res.setHeader('X-Origin-Host', originHost);
+      return res.status(200).send(svgContent);
+    }
+
+    if (rasterBuffer && !svgContent && (isSameExt || (requestedExt === 'webp' && isWebpSource))) {
+      const mimeMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', avif: 'image/avif' };
+      const outMime = mimeMap[requestedExt] || sourceContentType || 'application/octet-stream';
+      res.setHeader('X-Render-Engine', 'edge-passthrough');
+      res.setHeader('Content-Type', outMime);
+      res.setHeader('Content-Length', rasterBuffer.length);
+      res.setHeader('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
+      res.setHeader('CDN-Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('Cloudflare-CDN-Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('Content-Disposition', `inline; filename="${path.basename(withoutExt)}.${requestedExt}"`);
+      res.setHeader('X-Origin-Host', originHost);
+      return res.status(200).send(rasterBuffer);
+    }
   }
 
   // Transformation pipeline with Sharp
