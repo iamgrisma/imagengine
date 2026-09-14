@@ -9,13 +9,15 @@
       "includeFiles": "api/fonts/**"
     }
   },
+  "redirects": [
+    { "source": "/", "destination": "https://imagengine.grisma.info.np/", "permanent": false },
+    { "source": "/docs", "destination": "https://imagengine.grisma.info.np/docs", "permanent": false },
+    { "source": "/integration", "destination": "https://imagengine.grisma.info.np/integration", "permanent": false },
+    { "source": "/terms", "destination": "https://imagengine.grisma.info.np/terms", "permanent": false },
+    { "source": "/privacy", "destination": "https://imagengine.grisma.info.np/privacy", "permanent": false }
+  ],
   "rewrites": [
-    { "source": "/docs", "destination": "/docs.html" },
-    { "source": "/integration", "destination": "/integration.html" },
-    { "source": "/privacy", "destination": "/privacy.html" },
-    { "source": "/terms", "destination": "/terms.html" },
     { "source": "/engine.js", "destination": "/engine.js" },
-    { "source": "/", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/api" }
   ],
   "headers": [

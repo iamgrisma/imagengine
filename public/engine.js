@@ -3,7 +3,7 @@
  * Accelerates all images on your website with zero-downtime edge fallback.
  * 
  * Usage:
- * <script src="https://img.topnepali.com/engine.js" data-tenant="YOUR_TENANT_ID" data-subdomain="YOUR_SUBDOMAIN" async></script>
+ * <script src="https://imagengine.grisma.info.np/engine.js" data-tenant="YOUR_TENANT_ID" data-subdomain="YOUR_SUBDOMAIN" async></script>
  */
 (function() {
   'use strict';
@@ -15,7 +15,17 @@
 
   var tenant = currentScript ? currentScript.getAttribute('data-tenant') : '';
   var subdomain = currentScript ? (currentScript.getAttribute('data-subdomain') || 'main') : 'main';
-  var cdnHost = currentScript ? (currentScript.getAttribute('data-cdn') || 'https://img.topnepali.com') : 'https://img.topnepali.com';
+
+  // Smart CDN host detection: supports img.grisma.info.np, img.topnepali.com, or custom white-label CNAME
+  var scriptSrc = currentScript ? (currentScript.getAttribute('src') || '') : '';
+  var defaultCdn = 'https://img.grisma.info.np';
+  if (scriptSrc.indexOf('img.topnepali.com') !== -1) {
+    defaultCdn = 'https://img.topnepali.com';
+  } else if (scriptSrc.indexOf('img.grisma.info.np') !== -1) {
+    defaultCdn = 'https://img.grisma.info.np';
+  }
+
+  var cdnHost = currentScript ? (currentScript.getAttribute('data-cdn') || defaultCdn) : defaultCdn;
   var autoAvatar = currentScript ? (currentScript.getAttribute('data-avatar') === 'true') : false;
 
   if (!tenant) return;
@@ -24,7 +34,7 @@
     if (!img || img.dataset.engineProcessed || img.dataset.noEngine) return;
     var originalSrc = img.getAttribute('src');
     if (!originalSrc || originalSrc.indexOf('data:') === 0 || originalSrc.indexOf('blob:') === 0) return;
-    if (originalSrc.indexOf(cdnHost) !== -1) return;
+    if (originalSrc.indexOf('img.grisma.info.np') !== -1 || originalSrc.indexOf('img.topnepali.com') !== -1) return;
 
     img.dataset.originSrc = originalSrc;
     img.dataset.engineProcessed = 'true';

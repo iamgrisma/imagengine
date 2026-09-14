@@ -3,7 +3,6 @@ import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getLandingHtml } from './landing.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 process.env.FONTCONFIG_PATH = path.join(__dirname, 'fonts');
@@ -103,23 +102,27 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
-  // Root or health visit: Serve interactive Landing Page & Docs by default (or JSON if requested)
-  if (req.method === 'GET' && !query.url && (cleanPath === '' || cleanPath === 'api' || query.health)) {
-    const acceptsHtml = (req.headers['accept'] || '').includes('text/html');
-    if (!query.json && (acceptsHtml || cleanPath === '')) {
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
-      return res.status(200).send(getLandingHtml());
+  // Root or doc visit: Redirect to decoupled documentation portal, or serve JSON if requested
+  if (req.method === 'GET' && !query.url && (cleanPath === '' || cleanPath === 'api' || cleanPath === 'docs' || cleanPath === 'integration' || cleanPath === 'terms' || cleanPath === 'privacy' || query.health)) {
+    if (query.json || query.health) {
+      return res.status(200).json({
+        service: 'ImageEngine Edge CDN',
+        status: 'active',
+        version: '2.0.0',
+        defaultEngine: 'sharp',
+        defaultFormat: 'webp',
+        documentation: 'https://imagengine.grisma.info.np',
+        endpoints: [
+          'https://img.grisma.info.np',
+          'https://img.topnepali.com'
+        ],
+        contact: 'https://grisma.info.np/contact',
+        fonts: loadFonts().map(f => path.basename(f))
+      });
     }
-    return res.status(200).json({
-      service: 'ImageEngine',
-      status: 'active',
-      defaultEngine: 'sharp',
-      defaultFormat: 'webp',
-      documentation: 'https://img.topnepali.com',
-      contact: 'https://grisma.info.np/contact',
-      fonts: loadFonts().map(f => path.basename(f))
-    });
+    const targetSubPath = cleanPath && cleanPath !== 'api' ? `/${cleanPath}` : '';
+    res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+    return res.redirect(307, `https://imagengine.grisma.info.np${targetSubPath}`);
   }
 
   function sendError(status, message) {
