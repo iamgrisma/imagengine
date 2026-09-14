@@ -47,8 +47,11 @@
       var dpr = window.devicePixelRatio || 1;
       params.push('w=' + Math.round(img.width * (dpr > 1 ? 1.5 : 1)));
     }
-    var qs = params.length > 0 ? '?' + params.join('&') : '';
-    var edgeUrl = cdnHost + '/' + tenant + '/' + subdomain + '/' + cleanPath.replace(/\.(jpe?g|png|webp|svg)$/i, '') + '.webp' + qs;
+    var extMatch = cleanPath.match(/\.(jpe?g|png|webp|svg|gif|avif)$/i);
+    var edgePath = extMatch
+      ? cleanPath.replace(/\.(jpe?g|png|webp|svg|gif|avif)$/i, function(_, ext) { return '-' + ext.toLowerCase() + '.webp'; })
+      : cleanPath + '.webp';
+    var edgeUrl = cdnHost + '/' + tenant + '/' + subdomain + '/' + edgePath + qs;
 
     function onImgError() {
       img.removeEventListener('error', onImgError);
