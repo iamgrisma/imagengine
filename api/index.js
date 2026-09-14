@@ -7,14 +7,16 @@ process.env.FONTCONFIG_PATH = path.join(__dirname, 'fonts');
 process.env.FONTCONFIG_FILE = path.join(__dirname, 'fonts', 'fonts.conf');
 
 /**
- * Multi-Tenant Registry
- * Clean & minimal: You only need [tenantKey]: 'domain.com'
- * Or optionally [tenantKey]: { domain: 'domain.com', rateLimit: false }
+ * Multi-Tenant Allowed Registry
+ * Explicitly unthrottled for grisma.info.np, topnepali.com, grisma.com.np, and election.gov.np
  */
 const TENANTS = {
-  tn: 'topnepali.com',
-  ecn: 'election.gov.np',
-  tnnp: 'topnepali.com.np',
+  tn: { domain: 'topnepali.com', rateLimit: false },
+  tnnp: { domain: 'topnepali.com.np', rateLimit: false },
+  grisma: { domain: 'grisma.info.np', rateLimit: false },
+  gcomnp: { domain: 'grisma.com.np', rateLimit: false },
+  grismacomnp: { domain: 'grisma.com.np', rateLimit: false },
+  ecn: { domain: 'election.gov.np', rateLimit: false },
 };
 
 function getTenant(key) {
@@ -129,10 +131,11 @@ function getUpstreamCandidates(cleanPath, query) {
     ];
   }
 
-  // Forward extra query parameters (e.g. year=2079)
+  // Forward extra query parameters
   const forwardParams = new URLSearchParams();
+  const knownEngineKeys = ['url', 'format', 'w', 'width', 'h', 'height', 'q', 'quality', 'avatar', 'engine', 'fit', 'position', 'blur', 'sharpen'];
   for (const [k, v] of Object.entries(query)) {
-    if (!['url', 'format', 'w', 'h', 'avatar', 'engine'].includes(k)) {
+    if (!knownEngineKeys.includes(k)) {
       forwardParams.set(k, v);
     }
   }
@@ -184,11 +187,10 @@ export default async function handler(req, res) {
   }
 
   // Detect requested output format (.webp by default)
-  const extMatch = cleanPath.match(/\.(webp|png|jpe?g)$/i);
+  const extMatch = cleanPath.match(/\.(webp|png|jpe?g|avif)$/i);
   const requestedExt = (extMatch ? extMatch[1] : (query.format || 'webp')).toLowerCase().replace('jpeg', 'jpg');
-  const pathWithoutExt = cleanPath.replace(/\.(webp|png|jpe?g|svg)$/i, '');
+  const pathWithoutExt = cleanPath.replace(/\.(webp|png|jpe?g|svg|avif)$/i, '');
 
-  let resolved = null;
   let candidateUrls = [];
   let originHost = '';
   let tenantKey = '';
@@ -200,7 +202,7 @@ export default async function handler(req, res) {
     candidateUrls = [query.url];
     try { originHost = new URL(query.url).hostname; } catch {}
   } else {
-    resolved = getUpstreamCandidates(cleanPath, query);
+    const resolved = getUpstreamCandidates(cleanPath, query);
     if (!resolved || !resolved.candidates.length) {
       return sendError(404, 'Image route not found or unknown tenant namespace');
     }
@@ -245,14 +247,26 @@ export default async function handler(req, res) {
     return sendError(404, 'Upstream asset not found');
   }
 
-  // Crop & Avatar logic: ONLY active if explicitly requested via avatar parameter or avatar path
+  // Parse Transformation Parameters (Clean & Dimension-Preserving)
   const isAvatar = query.avatar === '1' || query.avatar === 'true' || cleanPath.includes('/avatar/');
-  const targetW = query.w ? parseInt(query.w, 10) : (isAvatar ? 256 : null);
-  const targetH = query.h ? parseInt(query.h, 10) : (isAvatar ? 256 : null);
+  const rawW = query.w || query.width;
+  const rawH = query.h || query.height;
+  const targetW = rawW ? parseInt(rawW, 10) : (isAvatar ? 256 : null);
+  const targetH = rawH ? parseInt(rawH, 10) : (isAvatar ? 256 : null);
 
-  // Fast direct pass-through for existing WebP files when no resizing is requested
-  const isDirectWebpPass = rasterBuffer && !svgContent && requestedExt === 'webp' && !targetW && !targetH && (sourceContentType.includes('webp') || finalTargetUrl.endsWith('.webp'));
-  if (isDirectWebpPass) {
+  const rawQ = query.q || query.quality;
+  const quality = rawQ ? Math.min(Math.max(parseInt(rawQ, 10), 1), 100) : (requestedExt === 'webp' ? 85 : 85);
+
+  const validFits = ['cover', 'contain', 'fill', 'inside', 'outside'];
+  const fitMode = validFits.includes(query.fit) ? query.fit : 'cover';
+
+  const validPositions = ['top', 'center', 'bottom', 'left', 'right', 'entropy', 'attention'];
+  const cropPos = validPositions.includes(query.position) ? query.position : (isAvatar ? 'top' : 'center');
+
+  // Fast direct pass-through for existing WebP files when NO dimensions or filters are altered
+  const isWebpSource = sourceContentType.includes('webp') || finalTargetUrl.endsWith('.webp');
+  const hasTransformModifications = targetW || targetH || isAvatar || query.q || query.quality || query.blur || query.sharpen;
+  if (rasterBuffer && !svgContent && requestedExt === 'webp' && isWebpSource && !hasTransformModifications) {
     res.setHeader('X-Render-Engine', 'edge-passthrough');
     res.setHeader('Content-Type', 'image/webp');
     res.setHeader('Content-Length', rasterBuffer.length);
@@ -275,18 +289,26 @@ export default async function handler(req, res) {
 
       res.setHeader('X-Render-Engine', 'sharp-svg');
       let pipeline = sharp(Buffer.from(svgContent), { density: 150 });
-      if (targetW || targetH) {
-        pipeline = pipeline.resize(targetW || 1200, targetH || null);
-      } else {
-        pipeline = pipeline.resize(1200);
+
+      // Preserve exact original dimensions unless width/height is explicitly requested
+      if (targetW && targetH) {
+        pipeline = pipeline.resize(targetW, targetH, { fit: fitMode, position: cropPos });
+      } else if (targetW || targetH) {
+        pipeline = pipeline.resize(targetW || null, targetH || null);
       }
 
+      if (query.blur) pipeline = pipeline.blur(Math.min(Math.max(parseFloat(query.blur), 0.3), 1000));
+      if (query.sharpen === 'true' || query.sharpen === '1') pipeline = pipeline.sharpen();
+
       if (requestedExt === 'webp') {
-        outputBuffer = await pipeline.webp({ quality: 85 }).toBuffer();
+        outputBuffer = await pipeline.webp({ quality }).toBuffer();
         contentType = 'image/webp';
       } else if (requestedExt === 'jpg') {
-        outputBuffer = await pipeline.jpeg({ quality: 85 }).toBuffer();
+        outputBuffer = await pipeline.jpeg({ quality }).toBuffer();
         contentType = 'image/jpeg';
+      } else if (requestedExt === 'avif') {
+        outputBuffer = await pipeline.avif({ quality }).toBuffer();
+        contentType = 'image/avif';
       } else {
         outputBuffer = await pipeline.png().toBuffer();
         contentType = 'image/png';
@@ -297,21 +319,28 @@ export default async function handler(req, res) {
       res.setHeader('X-Render-Engine', 'sharp-raster');
       let pipeline = sharp(rasterBuffer);
 
+      // Preserve exact original dimensions unless width/height is explicitly requested
       if (targetW && targetH) {
         pipeline = pipeline.resize(targetW, targetH, {
-          fit: 'cover',
-          position: isAvatar ? 'top' : 'center',
+          fit: fitMode,
+          position: isAvatar ? 'top' : cropPos,
         });
-      } else if (targetW) {
-        pipeline = pipeline.resize(targetW);
+      } else if (targetW || targetH) {
+        pipeline = pipeline.resize(targetW || null, targetH || null, { fit: fitMode });
       }
 
+      if (query.blur) pipeline = pipeline.blur(Math.min(Math.max(parseFloat(query.blur), 0.3), 1000));
+      if (query.sharpen === 'true' || query.sharpen === '1') pipeline = pipeline.sharpen();
+
       if (requestedExt === 'webp') {
-        outputBuffer = await pipeline.webp({ quality: 82 }).toBuffer();
+        outputBuffer = await pipeline.webp({ quality }).toBuffer();
         contentType = 'image/webp';
       } else if (requestedExt === 'jpg') {
-        outputBuffer = await pipeline.jpeg({ quality: 85 }).toBuffer();
+        outputBuffer = await pipeline.jpeg({ quality }).toBuffer();
         contentType = 'image/jpeg';
+      } else if (requestedExt === 'avif') {
+        outputBuffer = await pipeline.avif({ quality }).toBuffer();
+        contentType = 'image/avif';
       } else {
         outputBuffer = await pipeline.png().toBuffer();
         contentType = 'image/png';
