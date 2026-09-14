@@ -7,98 +7,58 @@ process.env.FONTCONFIG_PATH = path.join(__dirname, 'fonts');
 process.env.FONTCONFIG_FILE = path.join(__dirname, 'fonts', 'fonts.conf');
 
 /**
- * Tenant Registry: Domain routing and rate-limiting policy
- * rateLimit: false gives unthrottled enterprise edge delivery
+ * Allowed Tenant Registry: Whitelist mapping {identifier} -> root domain
+ * Universal: Engine-host agnostic, no host-header guessing, no special treatment
  */
 const TENANTS = {
-  tn:    { domain: 'topnepali.com', rateLimit: false },
-  ginfo: { domain: 'grisma.info.np', rateLimit: false },
-  gcom:  { domain: 'grisma.com.np', rateLimit: false },
-  gname: { domain: 'grisma.name.np', rateLimit: false },
-  ecn:   { domain: 'election.gov.np', rateLimit: false },
+  tn:    'topnepali.com',
+  ecn:   'election.gov.np',
+  ginfo: 'grisma.info.np',
+  gcom:  'grisma.com.np',
+  gname: 'grisma.name.np',
 };
 
 const LANDING_PAGE = 'https://imagengine.grisma.info.np';
-const CONTACT_URL = 'https://grisma.info.np/contact';
-
-// Sliding window daily usage tracker for throttled tenants
-const dailyUsage = new Map();
-function isRateLimitExceeded(tenantKey, dailyLimit = 1000) {
-  const day = new Date().toISOString().slice(0, 10);
-  const key = `${tenantKey}:${day}`;
-  const current = dailyUsage.get(key) || 0;
-  if (current >= dailyLimit) return true;
-  dailyUsage.set(key, current + 1);
-  return false;
-}
-
-/**
- * Host-based tenant inference
- * Enables direct requests like img.topnepali.com/abc-jpg.webp without /tn/ path prefix
- */
-function findTenantByHost(hostHeader) {
-  if (!hostHeader) return null;
-  const host = hostHeader.split(':')[0].toLowerCase();
-  // Exclude imagengine service host itself (gateway requires explicit tenant path)
-  if (host.startsWith('imagengine.')) return null;
-
-  for (const [key, config] of Object.entries(TENANTS)) {
-    if (host === config.domain || host.endsWith('.' + config.domain)) {
-      let originHost = host.replace(/^(img|image|images|cdn|assets)\./i, '');
-      if (!originHost.endsWith(config.domain)) {
-        originHost = config.domain;
-      }
-      return { tenantKey: key, tenant: config, originHost };
-    }
-  }
-  return null;
-}
 
 /**
  * Universal upstream candidate resolver
- * Maps /{tenant}/{subdomain}/{...assetPath} or /{tenant}/{...assetPath},
- * or directly {...assetPath} when host header identifies tenant domain.
+ * Pattern 1 (Subdomain):     /{tenant}/{subdomain}/{path}-{origExt}.{targetExt}
+ * Pattern 2 (Main Domain):   /{tenant}/{path}-{origExt}.{targetExt}
+ * Pattern 3 (Explicit Main): /{tenant}/main/{path}-{origExt}.{targetExt}
  */
-function resolveUpstream(cleanPath, query, hostHeader = '') {
+function resolveUpstream(cleanPath, query = {}) {
   const segments = cleanPath.split('/').filter(Boolean);
-  if (segments.length === 0) return null;
+  if (segments.length < 2) return null;
 
-  let tenantKey = '';
-  let tenant = null;
+  const tenantKey = segments[0].toLowerCase();
+  const domain = TENANTS[tenantKey];
+  if (!domain) return null;
+
   let originHost = '';
   let assetPath = '';
+  let secondaryHost = null;
+  let secondaryPath = '';
 
-  const firstSeg = segments[0].toLowerCase();
-  if (TENANTS[firstSeg]) {
-    // Explicit tenant in path: /{tenant}/{subdomain}/{...assetPath} or /{tenant}/{...assetPath}
-    tenantKey = firstSeg;
-    tenant = TENANTS[tenantKey];
-
-    if (segments.length === 1) {
-      return null;
-    } else if (segments.length === 2) {
-      originHost = tenant.domain;
-      assetPath = segments[1];
-    } else {
-      const sub = segments[1].toLowerCase();
-      originHost = (!sub || sub === 'main' || sub === 'www' || sub === '@')
-        ? tenant.domain
-        : `${sub}.${tenant.domain}`;
-      assetPath = segments.slice(2).join('/');
-    }
+  if (segments.length === 2) {
+    // /{tenant}/{assetPath} -> main domain direct
+    originHost = domain;
+    assetPath = segments[1];
   } else {
-    // Inferred tenant from host header (e.g. img.topnepali.com/abc-jpg.webp)
-    const inferred = findTenantByHost(hostHeader);
-    if (!inferred) return null;
-
-    tenantKey = inferred.tenantKey;
-    tenant = inferred.tenant;
-    originHost = inferred.originHost;
-    assetPath = segments.join('/');
+    const sub = segments[1].toLowerCase();
+    if (sub === 'main' || sub === 'www' || sub === '@') {
+      // /{tenant}/main/{...assetPath} -> explicit main domain
+      originHost = domain;
+      assetPath = segments.slice(2).join('/');
+    } else {
+      // /{tenant}/{subdomain}/{...assetPath} -> probe subdomain first, fallback to domain folder
+      originHost = `${sub}.${domain}`;
+      assetPath = segments.slice(2).join('/');
+      secondaryHost = domain;
+      secondaryPath = `${sub}/${assetPath}`;
+    }
   }
 
-  // Check for preserved origin extension pattern (zero-probing direct origin match)
-  // Supports: name-jpg.webp, name-png.webp, name-svg.webp, name.jpg.webp, etc.
+  // Parse preserved origin extension: {name}-{origExt}.{targetExt} or {name}.{origExt}.{targetExt}
   const matchDash = assetPath.match(/^(.*)-(jpe?g|png|webp|gif|svg|avif)\.([a-z0-9]+)$/i);
   const matchDot = !matchDash && assetPath.match(/^(.*)\.(jpe?g|png|webp|gif|svg|avif)\.([a-z0-9]+)$/i);
   const match = matchDash || matchDot;
@@ -113,18 +73,15 @@ function resolveUpstream(cleanPath, query, hostHeader = '') {
     requestedExt = match[3].toLowerCase();
     withoutExt = basePath;
 
-    if (origExt === 'jpg') {
-      candidates = [
-        `https://${originHost}/${basePath}.jpg`,
-        `https://${originHost}/${basePath}.jpeg`
-      ];
-    } else if (origExt === 'jpeg') {
-      candidates = [
-        `https://${originHost}/${basePath}.jpeg`,
-        `https://${originHost}/${basePath}.jpg`
-      ];
-    } else {
-      candidates = [`https://${originHost}/${basePath}.${origExt}`];
+    const exts = origExt === 'jpg' ? ['jpg', 'jpeg'] : origExt === 'jpeg' ? ['jpeg', 'jpg'] : [origExt];
+    for (const e of exts) {
+      candidates.push(`https://${originHost}/${basePath}.${e}`);
+    }
+    if (secondaryHost) {
+      const secBasePath = secondaryPath.replace(/-(jpe?g|png|webp|gif|svg|avif)\.[a-z0-9]+$/i, '');
+      for (const e of exts) {
+        candidates.push(`https://${secondaryHost}/${secBasePath}.${e}`);
+      }
     }
   } else {
     withoutExt = assetPath.replace(/\.(jpe?g|png|webp|gif|svg|avif)$/i, '');
@@ -133,21 +90,24 @@ function resolveUpstream(cleanPath, query, hostHeader = '') {
     requestedExt = ext || (query.format || 'webp').toLowerCase();
 
     if (ext && ext !== 'webp') {
-      // Direct extension requested (e.g., banner.jpg, logo.png, graphic.svg)
-      candidates = [`https://${originHost}/${assetPath}`];
+      candidates.push(`https://${originHost}/${assetPath}`);
+      if (secondaryHost) candidates.push(`https://${secondaryHost}/${secondaryPath}`);
     } else {
-      // Legacy un-dashed .webp or extensionless: fallback sequentially across standard formats
-      candidates = [
-        `https://${originHost}/${withoutExt}.webp`,
-        `https://${originHost}/${withoutExt}.jpg`,
-        `https://${originHost}/${withoutExt}.jpeg`,
-        `https://${originHost}/${withoutExt}.png`,
-        `https://${originHost}/${withoutExt}.svg`,
-      ];
+      // Fallback sequential probing across standard web formats
+      const exts = ['webp', 'jpg', 'jpeg', 'png', 'svg'];
+      for (const e of exts) {
+        candidates.push(`https://${originHost}/${withoutExt}.${e}`);
+      }
+      if (secondaryHost) {
+        const secWithoutExt = secondaryPath.replace(/\.(jpe?g|png|webp|gif|svg|avif)$/i, '');
+        for (const e of exts) {
+          candidates.push(`https://${secondaryHost}/${secWithoutExt}.${e}`);
+        }
+      }
     }
   }
 
-  // Preserve non-transformation query parameters
+  // Forward custom query params (ignoring transform keys)
   const forwardParams = new URLSearchParams();
   const engineKeys = new Set(['format', 'w', 'width', 'h', 'height', 'q', 'quality', 'avatar', 'fit', 'position', 'blur', 'sharpen']);
   for (const [k, v] of Object.entries(query)) {
@@ -157,17 +117,13 @@ function resolveUpstream(cleanPath, query, hostHeader = '') {
 
   return {
     candidates: [...new Set(candidates)].map(url => `${url}${qs}`),
-    originHost,
     tenantKey,
-    tenant,
-    assetPath,
     withoutExt,
     requestedExt,
   };
 }
 
 export default async function handler(req, res) {
-  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match');
@@ -190,7 +146,6 @@ export default async function handler(req, res) {
         version: '2.0.0',
         allowedTenants: Object.keys(TENANTS),
         documentation: LANDING_PAGE,
-        contact: CONTACT_URL,
       });
     }
     return res.redirect(307, `${LANDING_PAGE}/`);
@@ -203,22 +158,12 @@ export default async function handler(req, res) {
     return res.status(status).json({ error: message, status });
   }
 
-  const hostHeader = req.headers['x-forwarded-host'] || req.headers.host || '';
-  const resolved = resolveUpstream(cleanPath, query, hostHeader);
+  const resolved = resolveUpstream(cleanPath, query);
   if (!resolved) {
     return sendError(404, 'Route not found or unregistered tenant namespace');
   }
 
-  const { candidates, originHost, tenantKey, tenant, withoutExt } = resolved;
-
-  // Rate limiter check for throttled tenants
-  if (tenant.rateLimit) {
-    const limit = tenant.dailyLimit || 1000;
-    if (isRateLimitExceeded(tenantKey, limit)) {
-      res.setHeader('Retry-After', '86400');
-      return sendError(429, `Daily transformation quota exceeded (${limit}/day). Contact ${CONTACT_URL} for unthrottled access.`);
-    }
-  }
+  const { candidates, withoutExt } = resolved;
 
   // Fetch upstream asset across candidates (fast sequential check)
   let svgContent = '';
@@ -247,6 +192,8 @@ export default async function handler(req, res) {
   if (!svgContent && !rasterBuffer) {
     return sendError(404, 'Upstream asset not found');
   }
+
+  const originHost = new URL(finalTargetUrl).host;
 
   // Output format determination
   const requestedExt = (query.format || resolved.requestedExt || 'webp').toLowerCase().replace('jpeg', 'jpg');
@@ -278,7 +225,7 @@ export default async function handler(req, res) {
     res.setHeader('CDN-Cache-Control', 'public, max-age=31536000, immutable');
     res.setHeader('Cloudflare-CDN-Cache-Control', 'public, max-age=31536000, immutable');
     res.setHeader('Content-Disposition', `inline; filename="${path.basename(withoutExt)}.webp"`);
-    if (originHost) res.setHeader('X-Origin-Host', originHost);
+    res.setHeader('X-Origin-Host', originHost);
     return res.status(200).send(rasterBuffer);
   }
 
@@ -351,7 +298,7 @@ export default async function handler(req, res) {
 
     const filename = `${path.basename(withoutExt) || 'asset'}.${requestedExt}`;
 
-    if (originHost) res.setHeader('X-Origin-Host', originHost);
+    res.setHeader('X-Origin-Host', originHost);
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Length', outputBuffer.length);
     res.setHeader('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
