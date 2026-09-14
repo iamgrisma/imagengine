@@ -112,46 +112,49 @@ export default async function handler(req, res) {
     targetUrl = `https://election.topnepali.com/${upstreamSlug}.svg${forwardQuery}`;
   }
 
+  function sendError(status, message) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
+    return res.status(status).json({ error: message, status });
+  }
+
   if (targetUrl) {
     if (!isAllowedUrl(targetUrl)) {
-      return res.status(403).json({ error: 'Forbidden: Upstream domain not allowed', status: 403 });
+      return sendError(403, 'Forbidden: Upstream domain not allowed');
     }
 
     try {
       const upstream = await fetch(targetUrl, { signal: AbortSignal.timeout(6000) });
       if (!upstream.ok) {
-        return res.status(upstream.status || 404).json({
-          error: `Upstream returned HTTP ${upstream.status}`,
-          status: upstream.status
-        });
+        return sendError(upstream.status || 404, `Upstream returned HTTP ${upstream.status}`);
       }
       svgContent = await upstream.text();
     } catch (err) {
-      return res.status(502).json({ error: `Failed to fetch upstream SVG: ${err.message}`, status: 502 });
+      return sendError(502, `Failed to fetch upstream SVG: ${err.message}`);
     }
   } else if (req.method === 'POST') {
     // Direct POST is strictly restricted to authenticated internal callers
     const authKey = req.headers['x-engine-key'] || req.headers['authorization'];
     const secretKey = process.env.ENGINE_SECRET_KEY || 'topnepali-internal-2082';
     if (!authKey || (authKey !== secretKey && authKey !== `Bearer ${secretKey}`)) {
-      return res.status(403).json({ error: 'Forbidden: Direct SVG POST is restricted', status: 403 });
+      return sendError(403, 'Forbidden: Direct SVG POST is restricted');
     }
     svgContent = typeof req.body === 'string' ? req.body : (req.body?.svg || '');
   } else {
     // Any unknown route without a valid SVG URL -> 404
-    return res.status(404).json({ error: 'Image Not Found', status: 404 });
+    return sendError(404, 'Image Not Found');
   }
 
   if (!svgContent || !svgContent.includes('<svg')) {
-    return res.status(404).json({ error: 'Invalid or missing SVG payload', status: 404 });
+    return sendError(404, 'Invalid or missing SVG payload');
   }
 
   // Safety checks: XML entity restriction and size limit (max 500KB)
   if (svgContent.length > 500000) {
-    return res.status(413).json({ error: 'Payload Too Large: SVG exceeds 500KB limit', status: 413 });
+    return sendError(413, 'Payload Too Large: SVG exceeds 500KB limit');
   }
   if (svgContent.includes('<!ENTITY') || svgContent.includes('SYSTEM "')) {
-    return res.status(400).json({ error: 'Bad Request: External XML entities are forbidden', status: 400 });
+    return sendError(400, 'Bad Request: External XML entities are forbidden');
   }
 
   try {
