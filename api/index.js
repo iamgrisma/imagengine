@@ -12,10 +12,9 @@ process.env.FONTCONFIG_FILE = path.join(__dirname, 'fonts', 'fonts.conf');
  */
 const TENANTS = {
   tn: { domain: 'topnepali.com', rateLimit: false },
-  tnnp: { domain: 'topnepali.com.np', rateLimit: false },
-  grisma: { domain: 'grisma.info.np', rateLimit: false },
-  gcomnp: { domain: 'grisma.com.np', rateLimit: false },
-  grismacomnp: { domain: 'grisma.com.np', rateLimit: false },
+  ginfo: { domain: 'grisma.info.np', rateLimit: false },
+  gcom: { domain: 'grisma.com.np', rateLimit: false },
+  gname: { domain: 'grisma.name.np', rateLimit: false },
   ecn: { domain: 'election.gov.np', rateLimit: false },
 };
 
@@ -200,7 +199,7 @@ export default async function handler(req, res) {
       return sendError(403, 'Forbidden: Upstream domain not registered. Apply at https://grisma.info.np/contact');
     }
     candidateUrls = [query.url];
-    try { originHost = new URL(query.url).hostname; } catch {}
+    try { originHost = new URL(query.url).hostname; } catch { }
   } else {
     const resolved = getUpstreamCandidates(cleanPath, query);
     if (!resolved || !resolved.candidates.length) {
@@ -240,7 +239,7 @@ export default async function handler(req, res) {
         }
         break;
       }
-    } catch {}
+    } catch { }
   }
 
   if (!svgContent && !rasterBuffer) {
