@@ -8,37 +8,29 @@ process.env.FONTCONFIG_FILE = path.join(__dirname, 'fonts', 'fonts.conf');
 
 /**
  * Multi-Tenant Registry
- * Single clean configuration for all allowed domains, rate limits, and asset defaults.
+ * Clean & minimal: You only need [tenantKey]: 'domain.com'
+ * Or optionally [tenantKey]: { domain: 'domain.com', rateLimit: false }
  */
 const TENANTS = {
-  tn: {
-    domain: 'topnepali.com',
-    rateLimit: false,
-    defaultExt: 'svg',
-    defaultSub: 'election',
-  },
-  ecn: {
-    domain: 'election.gov.np',
-    rateLimit: false,
-    defaultExt: 'jpg',
-    defaultSub: 'result',
-    isAvatar: true,
-  },
-  tnnp: {
-    domain: 'topnepali.com.np',
-    rateLimit: false,
-    defaultExt: 'svg',
-    defaultSub: 'main',
-  },
+  tn: 'topnepali.com',
+  ecn: 'election.gov.np',
+  tnnp: 'topnepali.com.np',
 };
 
-/**
- * Validate that an upstream URL belongs to an allowed registered tenant domain
- */
+function getTenant(key) {
+  if (!key) return null;
+  const t = TENANTS[key.toLowerCase()];
+  if (!t) return null;
+  return typeof t === 'string' ? { domain: t, rateLimit: false } : t;
+}
+
 function isAllowedDomain(urlStr) {
   try {
     const host = new URL(urlStr).hostname.toLowerCase();
-    return Object.values(TENANTS).some(t => host === t.domain || host.endsWith('.' + t.domain));
+    return Object.keys(TENANTS).some(key => {
+      const conf = getTenant(key);
+      return conf && (host === conf.domain || host.endsWith('.' + conf.domain));
+    });
   } catch {
     return false;
   }
@@ -58,12 +50,13 @@ function isRateLimitExceeded(tenantKey, dailyLimit = 1000) {
 }
 
 /**
- * Resolves request path to origin target URL dynamically
+ * Generates candidate upstream URLs to fetch from origin
+ * Supports SVG, JPG, PNG, GIF, and WebP with zero forced conversions
  */
-function resolveUpstream(pathWithoutExt, query) {
-  const segments = pathWithoutExt.split('/').filter(Boolean);
+function getUpstreamCandidates(cleanPath, query) {
+  const segments = cleanPath.split('/').filter(Boolean);
   const tenantKey = (segments[0] || '').toLowerCase();
-  const tenant = TENANTS[tenantKey];
+  const tenant = getTenant(tenantKey);
 
   if (!tenant) {
     // Backward compatibility fallback for legacy un-namespaced requests
@@ -71,11 +64,10 @@ function resolveUpstream(pathWithoutExt, query) {
     if (!legacySlug || legacySlug === 'api') return null;
     const pathSlug = legacySlug.startsWith('og/') ? legacySlug : `og/${legacySlug}`;
     return {
-      targetUrl: `https://${TENANTS.tn.defaultSub}.${TENANTS.tn.domain}/${pathSlug}.svg`,
-      originHost: `${TENANTS.tn.defaultSub}.${TENANTS.tn.domain}`,
+      candidates: [`https://election.topnepali.com/${pathSlug}.svg`],
+      originHost: 'election.topnepali.com',
       tenantKey: 'tn',
-      tenantConfig: TENANTS.tn,
-      isAvatar: false,
+      tenantConfig: { domain: 'topnepali.com', rateLimit: false },
     };
   }
 
@@ -87,23 +79,57 @@ function resolveUpstream(pathWithoutExt, query) {
   const restSegments = segments.slice(2);
   let assetPath = restSegments.join('/');
 
-  // ECN candidate photo shortcut: candidate/335208 -> Images/Candidate/335208.jpg
+  // Special shortcut: ECN candidate/335208 -> Images/Candidate/335208.jpg
   if (tenantKey === 'ecn' && assetPath.toLowerCase().startsWith('candidate/')) {
-    const id = assetPath.split('/')[1] || '';
-    assetPath = `Images/Candidate/${id}.jpg`;
+    const id = assetPath.split('/')[1].replace(/\.(webp|jpe?g|png)$/i, '');
+    return {
+      candidates: [`https://${originHost}/Images/Candidate/${id}.jpg`],
+      originHost,
+      tenantKey,
+      tenantConfig: tenant,
+    };
   }
 
-  // Determine target extension
-  const hasExt = assetPath.match(/\.(jpe?g|png|webp|gif|svg)$/i);
-  if (!hasExt) {
-    if (tenant.defaultExt === 'svg' || assetPath.startsWith('og/')) {
-      assetPath = assetPath.startsWith('og/') ? `${assetPath}.svg` : `og/${assetPath}.svg`;
+  // If path starts with og/
+  if (assetPath.startsWith('og/')) {
+    const clean = assetPath.replace(/\.(webp|png|jpe?g|svg)$/i, '');
+    return {
+      candidates: [`https://${originHost}/${clean}.svg`],
+      originHost,
+      tenantKey,
+      tenantConfig: tenant,
+    };
+  }
+
+  // If assetPath has an explicit file extension
+  const extMatch = assetPath.match(/\.(jpe?g|png|webp|gif|svg)$/i);
+  let candidates = [];
+  if (extMatch) {
+    const withoutExt = assetPath.replace(/\.(jpe?g|png|webp|gif|svg)$/i, '');
+    const currentExt = extMatch[1].toLowerCase();
+    if (currentExt === 'webp') {
+      // Could be origin WebP, or origin JPG/PNG/SVG requested as WebP
+      candidates = [
+        `https://${originHost}/${assetPath}`,
+        `https://${originHost}/${withoutExt}.jpg`,
+        `https://${originHost}/${withoutExt}.jpeg`,
+        `https://${originHost}/${withoutExt}.png`,
+        `https://${originHost}/${withoutExt}.svg`,
+      ];
     } else {
-      assetPath = `${assetPath}.${tenant.defaultExt || 'jpg'}`;
+      candidates = [`https://${originHost}/${assetPath}`];
     }
+  } else {
+    // No extension specified: try webp, jpg, png, svg
+    candidates = [
+      `https://${originHost}/${assetPath}.webp`,
+      `https://${originHost}/${assetPath}.jpg`,
+      `https://${originHost}/${assetPath}.png`,
+      `https://${originHost}/${assetPath}.svg`,
+    ];
   }
 
-  // Forward custom query parameters (e.g. year=2079, locale=ne)
+  // Forward extra query parameters (e.g. year=2079)
   const forwardParams = new URLSearchParams();
   for (const [k, v] of Object.entries(query)) {
     if (!['url', 'format', 'w', 'h', 'avatar', 'engine'].includes(k)) {
@@ -113,11 +139,10 @@ function resolveUpstream(pathWithoutExt, query) {
   const qs = forwardParams.toString() ? `?${forwardParams.toString()}` : '';
 
   return {
-    targetUrl: `https://${originHost}/${assetPath}${qs}`,
+    candidates: candidates.map(u => `${u}${qs}`),
     originHost,
     tenantKey,
     tenantConfig: tenant,
-    isAvatar: tenant.isAvatar || false,
   };
 }
 
@@ -136,7 +161,7 @@ export default async function handler(req, res) {
 
   if (cleanPath === 'favicon.ico') return res.status(204).end();
 
-  // Root or health inspection
+  // Root, health, or JSON inspection
   if (req.method === 'GET' && !query.url && (cleanPath === '' || cleanPath === 'api' || cleanPath === 'health' || query.health)) {
     if (query.json || query.health || cleanPath === 'health') {
       return res.status(200).json({
@@ -149,7 +174,7 @@ export default async function handler(req, res) {
         contact: 'https://grisma.info.np/contact'
       });
     }
-    // Clean redirect to documentation portal
+    // Clean edge redirect to documentation portal
     return res.redirect(307, 'https://imagengine.grisma.info.np/');
   }
 
@@ -163,28 +188,26 @@ export default async function handler(req, res) {
   const requestedExt = (extMatch ? extMatch[1] : (query.format || 'webp')).toLowerCase().replace('jpeg', 'jpg');
   const pathWithoutExt = cleanPath.replace(/\.(webp|png|jpe?g|svg)$/i, '');
 
-  let targetUrl = query.url;
+  let resolved = null;
+  let candidateUrls = [];
   let originHost = '';
-  let isAvatarMode = false;
   let tenantKey = '';
 
-  if (targetUrl) {
-    // Explicit upstream URL passed via ?url=
-    if (!isAllowedDomain(targetUrl)) {
+  if (query.url) {
+    if (!isAllowedDomain(query.url)) {
       return sendError(403, 'Forbidden: Upstream domain not registered. Apply at https://grisma.info.np/contact');
     }
+    candidateUrls = [query.url];
+    try { originHost = new URL(query.url).hostname; } catch {}
   } else {
-    // Dynamic namespaced path resolution
-    const resolved = resolveUpstream(pathWithoutExt, query);
-    if (!resolved) {
+    resolved = getUpstreamCandidates(cleanPath, query);
+    if (!resolved || !resolved.candidates.length) {
       return sendError(404, 'Image route not found or unknown tenant namespace');
     }
-    targetUrl = resolved.targetUrl;
+    candidateUrls = resolved.candidates;
     originHost = resolved.originHost;
     tenantKey = resolved.tenantKey;
-    isAvatarMode = resolved.isAvatar;
 
-    // Tenant rate limiting
     if (resolved.tenantConfig.rateLimit) {
       const limit = resolved.tenantConfig.dailyLimit || 1000;
       if (isRateLimitExceeded(tenantKey, limit)) {
@@ -194,30 +217,54 @@ export default async function handler(req, res) {
     }
   }
 
-  // Fetch upstream asset
+  // Fetch upstream asset across candidates (fast sequential check)
   let svgContent = '';
   let rasterBuffer = null;
+  let sourceContentType = '';
+  let finalTargetUrl = '';
 
-  try {
-    const upstream = await fetch(targetUrl, { signal: AbortSignal.timeout(6000) });
-    if (!upstream.ok) {
-      return sendError(upstream.status || 404, `Upstream origin returned HTTP ${upstream.status}`);
-    }
-
-    const contentType = (upstream.headers.get('content-type') || '').toLowerCase();
-    const isSvg = contentType.includes('svg') || targetUrl.includes('.svg');
-
-    if (isSvg) {
-      svgContent = await upstream.text();
-    } else {
-      const arrayBuf = await upstream.arrayBuffer();
-      rasterBuffer = Buffer.from(arrayBuf);
-    }
-  } catch (err) {
-    return sendError(502, `Failed to fetch upstream asset: ${err.message}`);
+  for (const targetUrl of candidateUrls) {
+    try {
+      const upstream = await fetch(targetUrl, { signal: AbortSignal.timeout(5000) });
+      if (upstream.ok) {
+        finalTargetUrl = targetUrl;
+        sourceContentType = (upstream.headers.get('content-type') || '').toLowerCase();
+        const isSvg = sourceContentType.includes('svg') || targetUrl.includes('.svg');
+        if (isSvg) {
+          svgContent = await upstream.text();
+        } else {
+          const arrayBuf = await upstream.arrayBuffer();
+          rasterBuffer = Buffer.from(arrayBuf);
+        }
+        break;
+      }
+    } catch {}
   }
 
-  // Transform with Sharp
+  if (!svgContent && !rasterBuffer) {
+    return sendError(404, 'Upstream asset not found');
+  }
+
+  // Crop & Avatar logic: ONLY active if explicitly requested via avatar parameter or avatar path
+  const isAvatar = query.avatar === '1' || query.avatar === 'true' || cleanPath.includes('/avatar/');
+  const targetW = query.w ? parseInt(query.w, 10) : (isAvatar ? 256 : null);
+  const targetH = query.h ? parseInt(query.h, 10) : (isAvatar ? 256 : null);
+
+  // Fast direct pass-through for existing WebP files when no resizing is requested
+  const isDirectWebpPass = rasterBuffer && !svgContent && requestedExt === 'webp' && !targetW && !targetH && (sourceContentType.includes('webp') || finalTargetUrl.endsWith('.webp'));
+  if (isDirectWebpPass) {
+    res.setHeader('X-Render-Engine', 'edge-passthrough');
+    res.setHeader('Content-Type', 'image/webp');
+    res.setHeader('Content-Length', rasterBuffer.length);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
+    res.setHeader('CDN-Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Cloudflare-CDN-Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Content-Disposition', `inline; filename="${path.basename(pathWithoutExt)}.webp"`);
+    if (originHost) res.setHeader('X-Origin-Host', originHost);
+    return res.status(200).send(rasterBuffer);
+  }
+
+  // Image transformation via Sharp
   try {
     let outputBuffer;
     let contentType = 'image/webp';
@@ -227,7 +274,12 @@ export default async function handler(req, res) {
       if (svgContent.length > 500000) return sendError(413, 'SVG exceeds 500KB limit');
 
       res.setHeader('X-Render-Engine', 'sharp-svg');
-      const pipeline = sharp(Buffer.from(svgContent), { density: 150 }).resize(1200);
+      let pipeline = sharp(Buffer.from(svgContent), { density: 150 });
+      if (targetW || targetH) {
+        pipeline = pipeline.resize(targetW || 1200, targetH || null);
+      } else {
+        pipeline = pipeline.resize(1200);
+      }
 
       if (requestedExt === 'webp') {
         outputBuffer = await pipeline.webp({ quality: 85 }).toBuffer();
@@ -244,10 +296,6 @@ export default async function handler(req, res) {
 
       res.setHeader('X-Render-Engine', 'sharp-raster');
       let pipeline = sharp(rasterBuffer);
-
-      const isAvatar = isAvatarMode || query.avatar === '1' || query.avatar === 'true';
-      const targetW = query.w ? parseInt(query.w, 10) : (isAvatar ? 256 : null);
-      const targetH = query.h ? parseInt(query.h, 10) : (isAvatar ? 256 : null);
 
       if (targetW && targetH) {
         pipeline = pipeline.resize(targetW, targetH, {
@@ -268,8 +316,6 @@ export default async function handler(req, res) {
         outputBuffer = await pipeline.png().toBuffer();
         contentType = 'image/png';
       }
-    } else {
-      return sendError(404, 'No asset content available');
     }
 
     const filename = `${pathWithoutExt ? path.basename(pathWithoutExt) : 'asset'}.${requestedExt}`;
