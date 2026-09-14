@@ -75,7 +75,7 @@ function checkRateLimit(orgKey, orgConfig) {
   const dayKey = new Date().toISOString().slice(0, 10);
   const mapKey = `${orgKey}:${dayKey}`;
   const current = domainTransformCounts.get(mapKey) || 0;
-  const maxDaily = orgConfig.dailyLimit || 100;
+  const maxDaily = orgConfig.dailyLimit || 1000;
   if (current >= maxDaily) {
     return { allowed: false, current, limit: maxDaily };
   }

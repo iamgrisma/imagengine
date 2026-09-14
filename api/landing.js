@@ -434,14 +434,20 @@ export function getLandingHtml() {
     <section class="card">
       <h2><span class="icon">📊</span> CDN Quotas & Rate Limits</h2>
       <p>
-        Because ImageEngine caches rendered assets directly on Cloudflare Edge with <strong>1-year immutable caching</strong>, subsequent hits consume zero origin compute.
+        ImageEngine separates <strong>New Image Transformations</strong> (first-time rasterization) from <strong>Global Edge CDN Delivery</strong>. Once an image is rendered, assets are cached on Cloudflare Global Edge with <strong>1-year immutable caching</strong>:
       </p>
 
       <div class="limit-banner">
-        <ul style="list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: 0.94rem;">
-          <li>🟢 <strong>Global Edge Cache (HITs):</strong> <span style="color: #34d399; font-weight: 700;">Unlimited & Free</span> (Instant sub-15ms delivery)</li>
-          <li>🟡 <strong>New Transforms (Cache MISS):</strong> 100 images / day (up to 3,000 / month, 50,000 lifetime per domain)</li>
-          <li>🔵 <strong>Internal Ecosystem:</strong> Unthrottled priority execution</li>
+        <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px; font-size: 0.94rem;">
+          <li>🟢 <strong>Global Edge CDN Delivery (Cache HIT):</strong> <span style="color: #34d399; font-weight: 800;">UNLIMITED &amp; 100% FREE</span> — Millions of global requests served at sub-15ms edge latency with zero origin load.</li>
+          <li>🟡 <strong>New Image Transforms (Cache MISS):</strong>
+            <div style="margin-top: 6px; padding-left: 20px; font-size: 0.88rem; color: #cbd5e1; line-height: 1.7;">
+              • Daily Quota: <strong>1,000 unique images / day</strong><br>
+              • Monthly Quota: <strong>15,000 unique images / month</strong><br>
+              • Annual Cap: <strong>100,000 unique transforms / year</strong>
+            </div>
+          </li>
+          <li>🔵 <strong>Internal Ecosystem:</strong> Unthrottled priority execution with dedicated throughput.</li>
         </ul>
       </div>
     </section>
