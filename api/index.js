@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getLandingHtml } from './landing.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 process.env.FONTCONFIG_PATH = path.join(__dirname, 'fonts');
@@ -34,14 +35,23 @@ function loadFonts() {
   return files;
 }
 
-// Multi-Tenant Allowed Organizations & Root Domains
+// Multi-Tenant Allowed Organizations & Root Domains with Rate-Limit Policies
 const ORG_REGISTRY = {
-  tn: 'topnepali.com',
-  ecn: 'election.gov.np',
-  tnnp: 'topnepali.com.np',
+  tn: {
+    rootDomain: 'topnepali.com',
+    rateLimit: false, // Internal TopNepali ecosystem: unthrottled
+  },
+  ecn: {
+    rootDomain: 'election.gov.np',
+    rateLimit: false, // Official archive: unthrottled
+  },
+  tnnp: {
+    rootDomain: 'topnepali.com.np',
+    rateLimit: false,
+  },
 };
 
-const ALLOWED_ROOT_DOMAINS = Object.values(ORG_REGISTRY);
+const ALLOWED_ROOT_DOMAINS = Object.values(ORG_REGISTRY).map(o => typeof o === 'string' ? o : o.rootDomain);
 
 function isAllowedUrl(urlStr) {
   if (!urlStr || typeof urlStr !== 'string') return false;
@@ -53,6 +63,24 @@ function isAllowedUrl(urlStr) {
   } catch {
     return false;
   }
+}
+
+// In-memory rate limiter per lambda instance
+const domainTransformCounts = new Map();
+
+function checkRateLimit(orgKey, orgConfig) {
+  if (!orgConfig || orgConfig.rateLimit === false) {
+    return { allowed: true };
+  }
+  const dayKey = new Date().toISOString().slice(0, 10);
+  const mapKey = `${orgKey}:${dayKey}`;
+  const current = domainTransformCounts.get(mapKey) || 0;
+  const maxDaily = orgConfig.dailyLimit || 100;
+  if (current >= maxDaily) {
+    return { allowed: false, current, limit: maxDaily };
+  }
+  domainTransformCounts.set(mapKey, current + 1);
+  return { allowed: true, current: current + 1, limit: maxDaily };
 }
 
 export default async function handler(req, res) {
@@ -75,14 +103,21 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
-  // Simple service health check
+  // Root or health visit: Serve interactive Landing Page & Docs by default (or JSON if requested)
   if (req.method === 'GET' && !query.url && (cleanPath === '' || cleanPath === 'api' || query.health)) {
+    const acceptsHtml = (req.headers['accept'] || '').includes('text/html');
+    if (!query.json && (acceptsHtml || cleanPath === '')) {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+      return res.status(200).send(getLandingHtml());
+    }
     return res.status(200).json({
       service: 'ImageEngine',
       status: 'active',
       defaultEngine: 'sharp',
       defaultFormat: 'webp',
-      organizations: Object.keys(ORG_REGISTRY),
+      documentation: 'https://img.topnepali.com',
+      contact: 'https://grisma.info.np/contact',
       fonts: loadFonts().map(f => path.basename(f))
     });
   }
@@ -121,7 +156,8 @@ export default async function handler(req, res) {
     if (ORG_REGISTRY[firstSegment]) {
       // 1. Dynamic Namespaced Multi-Tenant Origin: /:org/:subdomain/:restPath*
       orgKey = firstSegment;
-      const rootDomain = ORG_REGISTRY[orgKey];
+      const orgConfig = ORG_REGISTRY[orgKey];
+      const rootDomain = orgConfig.rootDomain || orgConfig;
       const sub = (segments[1] || '').toLowerCase();
       const restSegments = segments.slice(2);
 
@@ -174,7 +210,15 @@ export default async function handler(req, res) {
 
   if (targetUrl) {
     if (!isAllowedUrl(targetUrl)) {
-      return sendError(403, 'Forbidden: Upstream domain not allowed');
+      return sendError(403, 'Forbidden: Upstream domain not allowed. Request domain onboarding at https://grisma.info.np/contact');
+    }
+
+    // Rate limit check
+    const orgConfig = ORG_REGISTRY[orgKey];
+    const limitCheck = checkRateLimit(orgKey, orgConfig);
+    if (!limitCheck.allowed) {
+      res.setHeader('Retry-After', '86400');
+      return sendError(429, `Daily transformation quota exceeded (${limitCheck.limit}/day). Request higher limits at https://grisma.info.np/contact`);
     }
 
     try {
