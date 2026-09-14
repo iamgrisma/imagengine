@@ -7,107 +7,79 @@ process.env.FONTCONFIG_PATH = path.join(__dirname, 'fonts');
 process.env.FONTCONFIG_FILE = path.join(__dirname, 'fonts', 'fonts.conf');
 
 /**
- * Allowed Tenant Registry: Whitelist mapping {identifier} -> root domain
- * Universal: Engine-host agnostic, no host-header guessing, no special treatment
+ * Tenant Registry: Allowed domain mappings and rate-limiting policy
+ * rateLimit: false provides unthrottled access
  */
 const TENANTS = {
-  tn:    'topnepali.com',
-  ecn:   'election.gov.np',
-  ginfo: 'grisma.info.np',
-  gcom:  'grisma.com.np',
-  gname: 'grisma.name.np',
+  tn:    { domain: 'topnepali.com',   rateLimit: false },
+  ginfo: { domain: 'grisma.info.np',  rateLimit: false },
+  gcom:  { domain: 'grisma.com.np',   rateLimit: false },
+  gname: { domain: 'grisma.name.np',  rateLimit: false },
+  ecn:   { domain: 'election.gov.np', rateLimit: false },
 };
 
 const LANDING_PAGE = 'https://imagengine.grisma.info.np';
+const CONTACT_URL = 'https://grisma.info.np/contact';
+
+// Sliding daily usage tracker for throttled tenants
+const dailyUsage = new Map();
+function isRateLimitExceeded(tenantKey, dailyLimit = 1000) {
+  const day = new Date().toISOString().slice(0, 10);
+  const key = `${tenantKey}:${day}`;
+  const current = dailyUsage.get(key) || 0;
+  if (current >= dailyLimit) return true;
+  dailyUsage.set(key, current + 1);
+  return false;
+}
 
 /**
- * Universal upstream candidate resolver
- * Pattern 1 (Subdomain):     /{tenant}/{subdomain}/{path}-{origExt}.{targetExt}
- * Pattern 2 (Main Domain):   /{tenant}/{path}-{origExt}.{targetExt}
- * Pattern 3 (Explicit Main): /{tenant}/main/{path}-{origExt}.{targetExt}
+ * Deterministic upstream resolver (Strict, Zero-Probing, Zero Trial-and-Hit)
+ * Pattern 1 (Subdomain):   /{tenant}/{subdomain}/{path}-{origExt}.{targetExt}
+ * Pattern 2 (Main Domain): /{tenant}/{path}-{origExt}.{targetExt}
+ * Pattern 3 (Explicit):    /{tenant}/main/{path}-{origExt}.{targetExt}
  */
 function resolveUpstream(cleanPath, query = {}) {
   const segments = cleanPath.split('/').filter(Boolean);
   if (segments.length < 2) return null;
 
   const tenantKey = segments[0].toLowerCase();
-  const domain = TENANTS[tenantKey];
-  if (!domain) return null;
+  const tenant = TENANTS[tenantKey];
+  if (!tenant) return null;
 
+  const domain = tenant.domain;
   let originHost = '';
-  let assetPath = '';
-  let secondaryHost = null;
-  let secondaryPath = '';
+  let assetWithFormats = '';
 
   if (segments.length === 2) {
-    // /{tenant}/{assetPath} -> main domain direct
+    // Main domain direct: /{tenant}/{path}-{origExt}.{targetExt}
     originHost = domain;
-    assetPath = segments[1];
+    assetWithFormats = segments[1];
   } else {
     const sub = segments[1].toLowerCase();
     if (sub === 'main' || sub === 'www' || sub === '@') {
-      // /{tenant}/main/{...assetPath} -> explicit main domain
+      // Main domain explicit: /{tenant}/main/{path}-{origExt}.{targetExt}
       originHost = domain;
-      assetPath = segments.slice(2).join('/');
+      assetWithFormats = segments.slice(2).join('/');
     } else {
-      // /{tenant}/{subdomain}/{...assetPath} -> probe subdomain first, fallback to domain folder
+      // Subdomain: /{tenant}/{subdomain}/{path}-{origExt}.{targetExt}
       originHost = `${sub}.${domain}`;
-      assetPath = segments.slice(2).join('/');
-      secondaryHost = domain;
-      secondaryPath = `${sub}/${assetPath}`;
+      assetWithFormats = segments.slice(2).join('/');
     }
   }
 
-  // Parse preserved origin extension: {name}-{origExt}.{targetExt} or {name}.{origExt}.{targetExt}
-  const matchDash = assetPath.match(/^(.*)-(jpe?g|png|webp|gif|svg|avif)\.([a-z0-9]+)$/i);
-  const matchDot = !matchDash && assetPath.match(/^(.*)\.(jpe?g|png|webp|gif|svg|avif)\.([a-z0-9]+)$/i);
+  // Exact parse: {basePath}-{origExt}.{targetExt} or {basePath}.{origExt}.{targetExt}
+  const matchDash = assetWithFormats.match(/^(.*)-(jpe?g|png|webp|gif|svg|avif)\.([a-z0-9]+)$/i);
+  const matchDot = !matchDash && assetWithFormats.match(/^(.*)\.(jpe?g|png|webp|gif|svg|avif)\.([a-z0-9]+)$/i);
   const match = matchDash || matchDot;
 
-  let candidates = [];
-  let withoutExt = '';
-  let requestedExt = '';
+  // Strict: Must specify original extension explicitly. No trial-and-hit guessing.
+  if (!match) return null;
 
-  if (match) {
-    const basePath = match[1];
-    const origExt = match[2].toLowerCase();
-    requestedExt = match[3].toLowerCase();
-    withoutExt = basePath;
+  const basePath = match[1];
+  const origExt = match[2].toLowerCase();
+  const requestedExt = match[3].toLowerCase();
 
-    const exts = origExt === 'jpg' ? ['jpg', 'jpeg'] : origExt === 'jpeg' ? ['jpeg', 'jpg'] : [origExt];
-    for (const e of exts) {
-      candidates.push(`https://${originHost}/${basePath}.${e}`);
-    }
-    if (secondaryHost) {
-      const secBasePath = secondaryPath.replace(/-(jpe?g|png|webp|gif|svg|avif)\.[a-z0-9]+$/i, '');
-      for (const e of exts) {
-        candidates.push(`https://${secondaryHost}/${secBasePath}.${e}`);
-      }
-    }
-  } else {
-    withoutExt = assetPath.replace(/\.(jpe?g|png|webp|gif|svg|avif)$/i, '');
-    const extMatch = assetPath.match(/\.(jpe?g|png|webp|gif|svg|avif)$/i);
-    const ext = extMatch ? extMatch[1].toLowerCase() : '';
-    requestedExt = ext || (query.format || 'webp').toLowerCase();
-
-    if (ext && ext !== 'webp') {
-      candidates.push(`https://${originHost}/${assetPath}`);
-      if (secondaryHost) candidates.push(`https://${secondaryHost}/${secondaryPath}`);
-    } else {
-      // Fallback sequential probing across standard web formats
-      const exts = ['webp', 'jpg', 'jpeg', 'png', 'svg'];
-      for (const e of exts) {
-        candidates.push(`https://${originHost}/${withoutExt}.${e}`);
-      }
-      if (secondaryHost) {
-        const secWithoutExt = secondaryPath.replace(/\.(jpe?g|png|webp|gif|svg|avif)$/i, '');
-        for (const e of exts) {
-          candidates.push(`https://${secondaryHost}/${secWithoutExt}.${e}`);
-        }
-      }
-    }
-  }
-
-  // Forward custom query params (ignoring transform keys)
+  // Forward non-transformation query parameters
   const forwardParams = new URLSearchParams();
   const engineKeys = new Set(['format', 'w', 'width', 'h', 'height', 'q', 'quality', 'avatar', 'fit', 'position', 'blur', 'sharpen']);
   for (const [k, v] of Object.entries(query)) {
@@ -115,10 +87,14 @@ function resolveUpstream(cleanPath, query = {}) {
   }
   const qs = forwardParams.toString() ? `?${forwardParams.toString()}` : '';
 
+  const originUrl = `https://${originHost}/${basePath}.${origExt}${qs}`;
+
   return {
-    candidates: [...new Set(candidates)].map(url => `${url}${qs}`),
+    originUrl,
+    originHost,
     tenantKey,
-    withoutExt,
+    tenant,
+    withoutExt: basePath,
     requestedExt,
   };
 }
@@ -146,6 +122,7 @@ export default async function handler(req, res) {
         version: '2.0.0',
         allowedTenants: Object.keys(TENANTS),
         documentation: LANDING_PAGE,
+        contact: CONTACT_URL,
       });
     }
     return res.redirect(307, `${LANDING_PAGE}/`);
@@ -160,40 +137,45 @@ export default async function handler(req, res) {
 
   const resolved = resolveUpstream(cleanPath, query);
   if (!resolved) {
-    return sendError(404, 'Route not found or unregistered tenant namespace');
+    return sendError(404, 'Route not found or invalid format schema. Required: /{tenant}/[subdomain/]{path}-{origExt}.{targetExt}');
   }
 
-  const { candidates, withoutExt } = resolved;
+  const { originUrl, originHost, tenantKey, tenant, withoutExt } = resolved;
 
-  // Fetch upstream asset across candidates (fast sequential check)
+  // Rate limiter check for throttled tenants
+  if (tenant.rateLimit) {
+    const limit = tenant.dailyLimit || 1000;
+    if (isRateLimitExceeded(tenantKey, limit)) {
+      res.setHeader('Retry-After', '86400');
+      return sendError(429, `Daily quota exceeded (${limit}/day). Contact ${CONTACT_URL} for unthrottled access.`);
+    }
+  }
+
+  // Fetch upstream asset: EXACTLY ONE HTTP request. ZERO trial-and-hit.
   let svgContent = '';
   let rasterBuffer = null;
   let sourceContentType = '';
-  let finalTargetUrl = '';
 
-  for (const targetUrl of candidates) {
-    try {
-      const upstream = await fetch(targetUrl, { signal: AbortSignal.timeout(5000) });
-      if (upstream.ok) {
-        finalTargetUrl = targetUrl;
-        sourceContentType = (upstream.headers.get('content-type') || '').toLowerCase();
-        const isSvg = sourceContentType.includes('svg') || targetUrl.includes('.svg');
-        if (isSvg) {
-          svgContent = await upstream.text();
-        } else {
-          const arrayBuf = await upstream.arrayBuffer();
-          rasterBuffer = Buffer.from(arrayBuf);
-        }
-        break;
-      }
-    } catch { }
+  try {
+    const upstream = await fetch(originUrl, { signal: AbortSignal.timeout(5000) });
+    if (!upstream.ok) {
+      return sendError(404, `Upstream asset not found (${upstream.status})`);
+    }
+    sourceContentType = (upstream.headers.get('content-type') || '').toLowerCase();
+    const isSvg = sourceContentType.includes('svg') || originUrl.includes('.svg');
+    if (isSvg) {
+      svgContent = await upstream.text();
+    } else {
+      const arrayBuf = await upstream.arrayBuffer();
+      rasterBuffer = Buffer.from(arrayBuf);
+    }
+  } catch (err) {
+    return sendError(502, `Upstream fetch error: ${err.message}`);
   }
 
   if (!svgContent && !rasterBuffer) {
-    return sendError(404, 'Upstream asset not found');
+    return sendError(404, 'Upstream asset payload empty');
   }
-
-  const originHost = new URL(finalTargetUrl).host;
 
   // Output format determination
   const requestedExt = (query.format || resolved.requestedExt || 'webp').toLowerCase().replace('jpeg', 'jpg');
@@ -215,7 +197,7 @@ export default async function handler(req, res) {
   const cropPos = validPositions.includes(query.position) ? query.position : (isAvatar ? 'top' : 'center');
 
   // Fast direct pass-through for WebP sources when no dimensions or filters are altered
-  const isWebpSource = sourceContentType.includes('webp') || finalTargetUrl.endsWith('.webp');
+  const isWebpSource = sourceContentType.includes('webp') || originUrl.includes('.webp');
   const hasTransformModifications = targetW || targetH || isAvatar || query.q || query.quality || query.blur || query.sharpen;
   if (rasterBuffer && !svgContent && requestedExt === 'webp' && isWebpSource && !hasTransformModifications) {
     res.setHeader('X-Render-Engine', 'edge-passthrough');
