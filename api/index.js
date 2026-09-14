@@ -94,40 +94,17 @@ function resolveUpstream(cleanPath, query) {
     const ext = extMatch ? extMatch[1].toLowerCase() : '';
     requestedExt = ext || (query.format || 'webp').toLowerCase();
 
-    if (assetPath.startsWith('og/')) {
-      // OpenGraph dynamic assets typically originate from SVG templates
+    if (ext && ext !== 'webp') {
+      // Direct extension requested (e.g., banner.jpg, logo.png, graphic.svg)
+      candidates = [`https://${originHost}/${assetPath}`];
+    } else {
+      // Legacy un-dashed .webp or extensionless: fallback sequentially across standard formats
       candidates = [
-        `https://${originHost}/${withoutExt}.svg`,
-        `https://${originHost}/${assetPath}`,
-        `https://${originHost}/${withoutExt}.png`,
-        `https://${originHost}/${withoutExt}.jpg`,
         `https://${originHost}/${withoutExt}.webp`,
-      ];
-    } else if (ext === 'webp') {
-      // Client requested WebP; origin might be WebP, JPG, PNG, or SVG
-      candidates = [
-        `https://${originHost}/${assetPath}`,
         `https://${originHost}/${withoutExt}.jpg`,
         `https://${originHost}/${withoutExt}.jpeg`,
         `https://${originHost}/${withoutExt}.png`,
-        `https://${originHost}/${withoutExt}.webp`,
         `https://${originHost}/${withoutExt}.svg`,
-      ];
-    } else if (ext) {
-      candidates = [
-        `https://${originHost}/${assetPath}`,
-        `https://${originHost}/${withoutExt}.jpg`,
-        `https://${originHost}/${withoutExt}.png`,
-        `https://${originHost}/${withoutExt}.webp`,
-      ];
-    } else {
-      // No extension in request: try webp, jpg, png, svg
-      candidates = [
-        `https://${originHost}/${assetPath}.webp`,
-        `https://${originHost}/${assetPath}.jpg`,
-        `https://${originHost}/${assetPath}.jpeg`,
-        `https://${originHost}/${assetPath}.png`,
-        `https://${originHost}/${assetPath}.svg`,
       ];
     }
   }
