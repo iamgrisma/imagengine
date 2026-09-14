@@ -34,37 +34,49 @@ function isRateLimitExceeded(tenantKey, dailyLimit = 1000) {
 
 /**
  * Deterministic upstream resolver (Strict, Zero-Probing, Zero Trial-and-Hit)
- * Pattern 1 (Subdomain):   /{tenant}/{subdomain}/{path}-{origExt}.{targetExt}
- * Pattern 2 (Main Domain): /{tenant}/{path}-{origExt}.{targetExt}
- * Pattern 3 (Explicit):    /{tenant}/main/{path}-{origExt}.{targetExt}
+ * Pattern 1 (Subdomain):   /{subdomain}.{tenant}/{path}-{origExt}.{targetExt}
+ * Pattern 2 (Root Domain): /{tenant}/{path}-{origExt}.{targetExt}
+ * Backward-compat:         /{tenant}/{subdomain}/{path}-{origExt}.{targetExt}
  */
 function resolveUpstream(cleanPath, query = {}) {
   const segments = cleanPath.split('/').filter(Boolean);
   if (segments.length < 2) return null;
 
-  const tenantKey = segments[0].toLowerCase();
-  const tenant = TENANTS[tenantKey];
-  if (!tenant) return null;
-
-  const domain = tenant.domain;
   let originHost = '';
   let assetWithFormats = '';
+  let tenantKey = '';
+  let tenant = null;
 
-  if (segments.length === 2) {
-    // Main domain direct: /{tenant}/{path}-{origExt}.{targetExt}
-    originHost = domain;
-    assetWithFormats = segments[1];
-  } else {
+  const target = segments[0].toLowerCase();
+  const lastDot = target.lastIndexOf('.');
+
+  if (lastDot !== -1) {
+    // New format: subdomain.tenant (e.g. 'result.ecn', 'election.tn', 'blog.seoapp.ginfo')
+    const subdomain = target.slice(0, lastDot);
+    tenantKey = target.slice(lastDot + 1);
+    tenant = TENANTS[tenantKey];
+    if (!tenant) return null;
+    originHost = `${subdomain}.${tenant.domain}`;
+    assetWithFormats = segments.slice(1).join('/');
+  } else if (TENANTS[target]) {
+    tenantKey = target;
+    tenant = TENANTS[tenantKey];
+
+    // Backward compatibility for legacy /ecn/result/... or /tn/election/...
     const sub = segments[1].toLowerCase();
-    if (sub === 'main' || sub === 'www' || sub === '@') {
-      // Main domain explicit: /{tenant}/main/{path}-{origExt}.{targetExt}
-      originHost = domain;
+    if (segments.length >= 3 && (sub === 'result' || sub === 'election')) {
+      originHost = `${sub}.${tenant.domain}`;
+      assetWithFormats = segments.slice(2).join('/');
+    } else if (segments.length >= 3 && (sub === 'main' || sub === 'www' || sub === '@')) {
+      originHost = tenant.domain;
       assetWithFormats = segments.slice(2).join('/');
     } else {
-      // Subdomain: /{tenant}/{subdomain}/{path}-{origExt}.{targetExt}
-      originHost = `${sub}.${domain}`;
-      assetWithFormats = segments.slice(2).join('/');
+      // Main root domain (e.g. /tn/uploads/photo-jpg.webp or /tn/abc-jpg.webp)
+      originHost = tenant.domain;
+      assetWithFormats = segments.slice(1).join('/');
     }
+  } else {
+    return null;
   }
 
   // Exact parse: {basePath}-{origExt}.{targetExt} or {basePath}.{origExt}.{targetExt}
