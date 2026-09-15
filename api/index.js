@@ -250,7 +250,7 @@ export default async function handler(req, res) {
 
     if (svgContent) {
       if (!svgContent.includes('<svg')) return sendError(404, 'Invalid SVG payload');
-      if (svgContent.length > 500000) return sendError(413, 'SVG exceeds 500KB limit');
+      if (svgContent.length > 2000000) return sendError(413, 'SVG exceeds 2MB limit');
 
       res.setHeader('X-Render-Engine', 'sharp-svg');
       let pipeline = sharp(Buffer.from(svgContent), { density: 150 });
