@@ -204,8 +204,16 @@ async function transform(source, query, opts, ext) {
     throw err;
   }
 
+  let inputBuffer = source.raster;
+  if (source.svg) {
+    const cleanSvg = source.svg
+      .replace(/&[a-zA-Z0-9#]*…/g, '…')
+      .replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[a-fA-F0-9]+);)/g, '&amp;');
+    inputBuffer = Buffer.from(cleanSvg);
+  }
+
   let img = sharp(
-    source.svg ? Buffer.from(source.svg) : source.raster,
+    inputBuffer,
     source.svg ? { density: 150 } : undefined,
   );
 
