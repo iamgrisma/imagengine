@@ -43,9 +43,17 @@ function rateLimitExceeded(tenantKey, limit = 1000) {
 }
 
 function error(res, status, message) {
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader(
+    'Cache-Control',
+    'private, no-cache, no-store, max-age=0, must-revalidate, s-maxage=0',
+  );
   res.setHeader('CDN-Cache-Control', 'no-store');
+  res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
   res.setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
+  res.setHeader('Surrogate-Control', 'no-store');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   return res.status(status).json({ error: message, status });
 }
 
@@ -242,96 +250,131 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const query = req.query || {};
-  const rawPath = req.headers['x-matched-path'] || req.url || '';
-  const [pathname] = rawPath.split('?');
-  const cleanPath = pathname.replace(/^\/+|\/+$/g, '');
+  try {
+    const query = req.query || {};
+    const rawPath = req.headers['x-matched-path'] || req.url || '';
+    const [pathname] = rawPath.split('?');
+    const cleanPath = pathname.replace(/^\/+|\/+$/g, '');
 
-  if (cleanPath === 'favicon.ico') return res.status(204).end();
+    if (cleanPath === 'favicon.ico') return res.status(204).end();
 
-  if (!cleanPath || cleanPath === 'api' || cleanPath === 'health' || query.health) {
-    return res.status(200).json({
-      service: 'ImageEngine Edge CDN',
-      status: 'active',
-      version: '2.0.0',
-      allowedTenants: Object.keys(TENANTS),
-      documentation: LANDING_PAGE,
-      contact: CONTACT_URL,
-    });
-  }
+    if (!cleanPath || cleanPath === 'api') {
+      if (query.json || query.health) {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader(
+          'Cache-Control',
+          'private, no-cache, no-store, max-age=0, must-revalidate, s-maxage=0',
+        );
+        res.setHeader('CDN-Cache-Control', 'no-store');
+        res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
+        res.setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
+        return res.status(200).json({
+          service: 'ImageEngine Edge CDN',
+          status: 'active',
+          version: '2.0.0',
+          allowedTenants: Object.keys(TENANTS),
+          documentation: LANDING_PAGE,
+          contact: CONTACT_URL,
+        });
+      }
+      // Explicit user rule exception: redirect root visitors to landing page
+      res.setHeader(
+        'Cache-Control',
+        'private, no-cache, no-store, max-age=0, must-revalidate',
+      );
+      return res.redirect(307, `${LANDING_PAGE}/`);
+    }
 
-  const route = resolveUpstream(cleanPath, query);
-  if (!route) {
-    return error(
-      res,
-      404,
-      'Route not found or invalid format schema. Required: /[subdomain.]identifier/{path}-{origExt}.{targetExt}',
-    );
-  }
+    if (cleanPath === 'health') {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader(
+        'Cache-Control',
+        'private, no-cache, no-store, max-age=0, must-revalidate, s-maxage=0',
+      );
+      res.setHeader('CDN-Cache-Control', 'no-store');
+      res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
+      res.setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
+      return res.status(200).json({
+        service: 'ImageEngine Edge CDN',
+        status: 'active',
+        version: '2.0.0',
+        allowedTenants: Object.keys(TENANTS),
+        documentation: LANDING_PAGE,
+        contact: CONTACT_URL,
+      });
+    }
 
-  const {
-    originUrl,
-    originHost,
-    tenantKey,
-    tenant,
-    withoutExt,
-    origExt,
-    requestedExt: routeExt,
-  } = route;
-
-  if (tenant.rateLimit) {
-    const limit = tenant.dailyLimit || 1000;
-    if (rateLimitExceeded(tenantKey, limit)) {
-      res.setHeader('Retry-After', '86400');
+    const route = resolveUpstream(cleanPath, query);
+    if (!route) {
       return error(
         res,
-        429,
-        `Daily quota exceeded (${limit}/day). Contact ${CONTACT_URL} for unthrottled access.`,
+        404,
+        'Route not found or invalid format schema. Required: /[subdomain.]identifier/{path}-{origExt}.{targetExt}',
       );
     }
-  }
 
-  const requestedExt = normalizeExt(query.format || routeExt || 'webp');
+    const {
+      originUrl,
+      originHost,
+      tenantKey,
+      tenant,
+      withoutExt,
+      origExt,
+      requestedExt: routeExt,
+    } = route;
 
-  let source;
-  try {
-    source = await fetchSource(originUrl);
-  } catch (err) {
-    return error(
-      res,
-      err.status || 502,
-      err.status ? err.message : `Upstream fetch error: ${err.message}`,
-    );
-  }
+    if (tenant.rateLimit) {
+      const limit = tenant.dailyLimit || 1000;
+      if (rateLimitExceeded(tenantKey, limit)) {
+        res.setHeader('Retry-After', '86400');
+        return error(
+          res,
+          429,
+          `Daily quota exceeded (${limit}/day). Contact ${CONTACT_URL} for unthrottled access.`,
+        );
+      }
+    }
 
-  if (!source.svg && !source.raster) {
-    return error(res, 404, 'Upstream asset payload empty');
-  }
+    const requestedExt = normalizeExt(query.format || routeExt || 'webp');
 
-  const opts = getOptions(query, cleanPath);
-  const transformed = needsTransform(query, opts);
-  const sameExt = origExt === requestedExt;
-  const webpSource = source.type.includes('webp');
+    let source;
+    try {
+      source = await fetchSource(originUrl);
+    } catch (err) {
+      return error(
+        res,
+        err.status || 502,
+        err.status ? err.message : `Upstream fetch error: ${err.message}`,
+      );
+    }
 
-  if (!transformed && source.svg && requestedExt === 'svg') {
-    return imageResponse(res, Buffer.from(source.svg), {
-      type: 'image/svg+xml; charset=utf-8',
-      filename: `${path.basename(withoutExt)}.svg`,
-      host: originHost,
-      engine: 'edge-passthrough',
-    });
-  }
+    if (!source.svg && !source.raster) {
+      return error(res, 404, 'Upstream asset payload empty');
+    }
 
-  if (!transformed && source.raster && (sameExt || (requestedExt === 'webp' && webpSource))) {
-    return imageResponse(res, source.raster, {
-      type: MIME[requestedExt] || source.type || 'application/octet-stream',
-      filename: `${path.basename(withoutExt)}.${requestedExt}`,
-      host: originHost,
-      engine: 'edge-passthrough',
-    });
-  }
+    const opts = getOptions(query, cleanPath);
+    const transformed = needsTransform(query, opts);
+    const sameExt = origExt === requestedExt;
+    const webpSource = source.type.includes('webp');
 
-  try {
+    if (!transformed && source.svg && requestedExt === 'svg') {
+      return imageResponse(res, Buffer.from(source.svg), {
+        type: 'image/svg+xml; charset=utf-8',
+        filename: `${path.basename(withoutExt)}.svg`,
+        host: originHost,
+        engine: 'edge-passthrough',
+      });
+    }
+
+    if (!transformed && source.raster && (sameExt || (requestedExt === 'webp' && webpSource))) {
+      return imageResponse(res, source.raster, {
+        type: MIME[requestedExt] || source.type || 'application/octet-stream',
+        filename: `${path.basename(withoutExt)}.${requestedExt}`,
+        host: originHost,
+        engine: 'edge-passthrough',
+      });
+    }
+
     const result = await transform(source, query, opts, requestedExt);
     return imageResponse(res, result.buffer, {
       type: result.type,
@@ -340,6 +383,6 @@ export default async function handler(req, res) {
       engine: source.svg ? 'sharp-svg' : 'sharp-raster',
     });
   } catch (err) {
-    return error(res, err.status || 500, err.message || 'Image transformation failed');
+    return error(res, err.status || 500, err.message || 'Image processing failed');
   }
 }

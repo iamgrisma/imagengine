@@ -9,6 +9,9 @@
       "includeFiles": "api/fonts/**"
     }
   },
+  "redirects": [
+    { "source": "/", "destination": "https://imagengine.grisma.info.np/", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/api" }
   ],
