@@ -16,7 +16,7 @@
          │ (Cold hit)
          ▼
 [ ImageEngine Edge Router ]
-  ├── 1. Clean Path Namespace Routing: /{tenant}/{subdomain}/{path...}
+  ├── 1. Clean Path Namespace Routing: /[subdomain.]identifier/{path...}
   ├── 2. Direct Passthrough: Fast-path for unaltered WebP files
   ├── 3. Dynamic Sharp Pipeline: On-the-fly WebP/AVIF/PNG/JPG conversion
   └── 4. 100% Dimension Preservation: Retains natural dimensions unless w/h requested
@@ -32,21 +32,22 @@
 ImageEngine uses clean URL paths. No query URL encoding is needed.
 
 ```http
-https://img.topnepali.com/{tenant}/{subdomain}/{assetPath...}
+https://img.topnepali.com/[subdomain.]identifier/{assetPath}-{origExt}.{targetExt}
 ```
 
-### Subdomain Shorthands
-- `main`, `@`, or `www`: Routes to apex/root domain (e.g. `grisma.info.np`).
-- Named subdomain: Routes to `{subdomain}.{domain}` (e.g. `election.topnepali.com`, `result.election.gov.np`).
+### Identifier & Subdomain Logic
+- **Apex / Root Domain**: `{identifier}` (e.g. `tn` -> `topnepali.com`, `ginfo` -> `grisma.info.np`).
+- **Subdomain**: `{subdomain}.{identifier}` (e.g. `election.tn` -> `election.topnepali.com`, `result.ecn` -> `result.election.gov.np`).
+- **Multi-level Subdomain**: `{sub.domain}.{identifier}` (e.g. `sub.election.tn` -> `sub.election.topnepali.com`).
 
 ### Examples
 
 | Target Asset on Origin | ImageEngine Edge URL |
 | :--- | :--- |
-| `https://election.topnepali.com/og/candidate/sobita-gautam.svg` | `https://img.topnepali.com/tn/election/og/candidate/sobita-gautam.webp` |
-| `https://result.election.gov.np/Images/Candidate/335208.jpg` | `https://img.topnepali.com/ecn/result/Images/Candidate/335208.webp` |
-| `https://grisma.info.np/assets/images/logo.png` | `https://img.grisma.info.np/ginfo/main/assets/images/logo.webp` |
-| `https://grisma.com.np/banner.jpg` | `https://img.grisma.info.np/gcom/@/banner.webp` |
+| `https://election.topnepali.com/og/candidate/sobita-gautam.svg` | `https://img.topnepali.com/election.tn/og/candidate/sobita-gautam-svg.webp` |
+| `https://result.election.gov.np/Images/Candidate/335208.jpg` | `https://img.topnepali.com/result.ecn/Images/Candidate/335208-jpg.webp` |
+| `https://grisma.info.np/assets/images/logo.png` | `https://img.grisma.info.np/ginfo/assets/images/logo-png.webp` |
+| `https://grisma.com.np/banner.jpg` | `https://img.grisma.info.np/gcom/banner-jpg.webp` |
 
 ---
 

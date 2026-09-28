@@ -69,40 +69,18 @@ function resolveUpstream(cleanPath, query = {}) {
   const parts = cleanPath.split('/').filter(Boolean);
   if (parts.length < 2) return null;
 
-  let originHost = '';
-  let asset = '';
-  let tenantKey = '';
-  let tenant = null;
+  const hostParts = parts[0].toLowerCase().split('.').filter(Boolean);
+  if (!hostParts.length) return null;
 
-  const target = parts[0].toLowerCase();
-  const lastDot = target.lastIndexOf('.');
+  const tenantKey = hostParts.pop();
+  const tenant = TENANTS[tenantKey];
+  if (!tenant) return null;
 
-  if (lastDot !== -1) {
-    const subdomain = target.slice(0, lastDot);
-    tenantKey = target.slice(lastDot + 1);
-    tenant = TENANTS[tenantKey];
-    if (!tenant) return null;
-    originHost = `${subdomain}.${tenant.domain}`;
-    asset = parts.slice(1).join('/');
-  } else if (TENANTS[target]) {
-    tenantKey = target;
-    tenant = TENANTS[tenantKey];
+  const originHost = hostParts.length
+    ? `${hostParts.join('.')}.${tenant.domain}`
+    : tenant.domain;
 
-    // Backward-compatibility: /{tenant}/{subdomain}/... e.g. /tn/election/... or /ecn/result/...
-    const sub = parts[1].toLowerCase();
-    if (parts.length >= 3 && (sub === 'result' || sub === 'election' || sub === 'constitution')) {
-      originHost = `${sub}.${tenant.domain}`;
-      asset = parts.slice(2).join('/');
-    } else if (parts.length >= 3 && (sub === 'main' || sub === 'www' || sub === '@')) {
-      originHost = tenant.domain;
-      asset = parts.slice(2).join('/');
-    } else {
-      originHost = tenant.domain;
-      asset = parts.slice(1).join('/');
-    }
-  } else {
-    return null;
-  }
+  const asset = parts.slice(1).join('/');
 
   const match =
     asset.match(/^(.*)-(jpe?g|png|webp|gif|svg|avif)\.([a-z0-9]+)$/i) ||
@@ -272,17 +250,14 @@ export default async function handler(req, res) {
   if (cleanPath === 'favicon.ico') return res.status(204).end();
 
   if (!cleanPath || cleanPath === 'api' || cleanPath === 'health' || query.health) {
-    if (query.json || query.health || cleanPath === 'health') {
-      return res.status(200).json({
-        service: 'ImageEngine Edge CDN',
-        status: 'active',
-        version: '2.0.0',
-        allowedTenants: Object.keys(TENANTS),
-        documentation: LANDING_PAGE,
-        contact: CONTACT_URL,
-      });
-    }
-    return res.redirect(307, `${LANDING_PAGE}/`);
+    return res.status(200).json({
+      service: 'ImageEngine Edge CDN',
+      status: 'active',
+      version: '2.0.0',
+      allowedTenants: Object.keys(TENANTS),
+      documentation: LANDING_PAGE,
+      contact: CONTACT_URL,
+    });
   }
 
   const route = resolveUpstream(cleanPath, query);
@@ -290,7 +265,7 @@ export default async function handler(req, res) {
     return error(
       res,
       404,
-      'Route not found or invalid format schema. Required: /{tenant}/[subdomain.tenant/]{path}-{origExt}.{targetExt}',
+      'Route not found or invalid format schema. Required: /[subdomain.]identifier/{path}-{origExt}.{targetExt}',
     );
   }
 
