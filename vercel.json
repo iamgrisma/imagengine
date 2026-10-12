@@ -1,17 +1,10 @@
 {
   "version": 2,
-  "cleanUrls": true,
-  "trailingSlash": false,
   "functions": {
     "api/index.js": {
-      "memory": 1024,
-      "maxDuration": 15,
       "includeFiles": "api/fonts/**"
     }
   },
-  "redirects": [
-    { "source": "/", "destination": "https://imagengine.grisma.info.np/", "permanent": false }
-  ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/api" }
   ],
@@ -21,9 +14,9 @@
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, HEAD, OPTIONS" },
         { "key": "Access-Control-Allow-Headers", "value": "Content-Type, If-None-Match" },
-        { "key": "Access-Control-Expose-Headers", "value": "ETag, Cache-Control" }
+        { "key": "Access-Control-Expose-Headers", "value": "ETag, Cache-Control, X-Render-Engine, X-Origin-Host" }
       ]
     }
   ]

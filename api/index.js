@@ -7,22 +7,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 process.env.FONTCONFIG_PATH = path.join(__dirname, 'fonts');
 process.env.FONTCONFIG_FILE = path.join(__dirname, 'fonts', 'fonts.conf');
 
-// Serverless CPU & Memory Optimization:
-// Restrict libvips to single-thread per transformation to prevent thread contention on AWS/Vercel.
-// Disable unmanaged internal memory cache to prevent glibc heap fragmentation between warm serverless invocations.
+// Restrict libvips to single-threaded processing and disable heap cache for serverless efficiency
 sharp.concurrency(1);
 sharp.cache(false);
 
 const TENANTS = {
-  tn: { domain: 'topnepali.com', rateLimit: false },
-  ginfo: { domain: 'grisma.info.np', rateLimit: false },
-  gcom: { domain: 'grisma.com.np', rateLimit: false },
-  gname: { domain: 'grisma.name.np', rateLimit: false },
-  ecn: { domain: 'election.gov.np', rateLimit: false },
+  tn: 'topnepali.com',
+  ginfo: 'grisma.info.np',
+  gcom: 'grisma.com.np',
+  gname: 'grisma.name.np',
+  ecn: 'election.gov.np',
 };
-
-const LANDING_PAGE = 'https://imagengine.grisma.info.np';
-const CONTACT_URL = 'https://grisma.info.np/contact';
 
 const ENGINE_KEYS = new Set([
   'format', 'w', 'width', 'h', 'height', 'q', 'quality',
@@ -31,36 +26,20 @@ const ENGINE_KEYS = new Set([
 
 const MIME = {
   jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
   png: 'image/png',
   webp: 'image/webp',
   gif: 'image/gif',
   avif: 'image/avif',
+  svg: 'image/svg+xml; charset=utf-8',
 };
 
-const CACHE = 'public, max-age=31536000, s-maxage=31536000, immutable';
-const CDN_CACHE = 'public, max-age=31536000, immutable';
-const dailyUsage = new Map();
-
-function rateLimitExceeded(tenantKey, limit = 1000) {
-  const key = `${tenantKey}:${new Date().toISOString().slice(0, 10)}`;
-  const count = dailyUsage.get(key) || 0;
-  if (count >= limit) return true;
-  dailyUsage.set(key, count + 1);
-  return false;
-}
+const CACHE_HEADER = 'public, max-age=31536000, s-maxage=31536000, immutable';
+const CDN_CACHE_HEADER = 'public, max-age=31536000, immutable';
 
 function error(res, status, message) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader(
-    'Cache-Control',
-    'private, no-cache, no-store, max-age=0, must-revalidate, s-maxage=0',
-  );
-  res.setHeader('CDN-Cache-Control', 'no-store');
-  res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
-  res.setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
-  res.setHeader('Surrogate-Control', 'no-store');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
   return res.status(status).json({ error: message, status });
 }
 
@@ -72,10 +51,10 @@ function imageResponse(req, res, body, { type, filename, host, engine }) {
   res.setHeader('Content-Type', type);
   res.setHeader('Content-Length', body.length);
   res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-  res.setHeader('Cache-Control', CACHE);
-  res.setHeader('CDN-Cache-Control', CDN_CACHE);
-  res.setHeader('Vercel-CDN-Cache-Control', CDN_CACHE);
-  res.setHeader('Cloudflare-CDN-Cache-Control', CDN_CACHE);
+  res.setHeader('Cache-Control', CACHE_HEADER);
+  res.setHeader('CDN-Cache-Control', CDN_CACHE_HEADER);
+  res.setHeader('Vercel-CDN-Cache-Control', CDN_CACHE_HEADER);
+  res.setHeader('Cloudflare-CDN-Cache-Control', CDN_CACHE_HEADER);
 
   if (req && req.headers && req.headers['if-none-match'] === etag) {
     return res.status(304).end();
@@ -95,12 +74,12 @@ function resolveUpstream(cleanPath, query = {}) {
   if (!hostParts.length) return null;
 
   const tenantKey = hostParts.pop();
-  const tenant = TENANTS[tenantKey];
-  if (!tenant) return null;
+  const tenantDomain = TENANTS[tenantKey];
+  if (!tenantDomain) return null;
 
   const originHost = hostParts.length
-    ? `${hostParts.join('.')}.${tenant.domain}`
-    : tenant.domain;
+    ? `${hostParts.join('.')}.${tenantDomain}`
+    : tenantDomain;
 
   const asset = parts.slice(1).join('/');
 
@@ -122,8 +101,6 @@ function resolveUpstream(cleanPath, query = {}) {
   return {
     originUrl: `https://${originHost}/${basePath}.${originalExt}${qs}`,
     originHost,
-    tenantKey,
-    tenant,
     withoutExt: basePath,
     origExt: normalizeExt(originalExt),
     requestedExt: normalizeExt(targetExt),
@@ -212,12 +189,6 @@ async function transform(source, query, opts, ext) {
     }
   }
 
-  if (source.raster && source.raster.length < 50) {
-    const err = new Error('Invalid image buffer');
-    err.status = 404;
-    throw err;
-  }
-
   let inputBuffer = source.raster;
   if (source.svg) {
     const cleanSvg = source.svg
@@ -226,12 +197,10 @@ async function transform(source, query, opts, ext) {
     inputBuffer = Buffer.from(cleanSvg);
   }
 
-  // High-performance CPU optimization:
-  // Render SVG at 72 DPI (natural 1:1 scale for 1200x630 OG templates) instead of 150 DPI.
-  // Rendering at 150 DPI ballooned internal rasterization to 2500x1312 (3.2M pixels) before
-  // downscaling, burning 4x more CPU cycles than necessary.
   const targetWidth = opts.width || 1200;
-  const svgDensity = (source.svg && targetWidth > 1200) ? Math.min(Math.round((targetWidth / 1200) * 72), 150) : 72;
+  const svgDensity = (source.svg && targetWidth > 1200)
+    ? Math.min(Math.round((targetWidth / 1200) * 72), 150)
+    : 72;
 
   let img = sharp(
     inputBuffer,
@@ -256,11 +225,9 @@ async function transform(source, query, opts, ext) {
   }
 
   const encode = {
-    // WebP effort 2 is 2.5x faster than default effort 4 with identical visual quality at Q85
     webp: () => img.webp({ quality: opts.quality, effort: 2 }),
     jpg: () => img.jpeg({ quality: opts.quality, mozjpeg: false }),
     avif: () => img.avif({ quality: opts.quality, effort: 2 }),
-    // PNG compressionLevel 6 cuts compression CPU time by 60% compared to level 9 with lossless output
     png: () => img.png({ compressionLevel: 6, effort: 4 }),
   }[ext] || (() => img.png({ compressionLevel: 6, effort: 4 }));
 
@@ -274,10 +241,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match');
-  res.setHeader(
-    'Access-Control-Expose-Headers',
-    'ETag, Cache-Control, X-Render-Engine, X-Origin-Host',
-  );
+  res.setHeader('Access-Control-Expose-Headers', 'ETag, Cache-Control, X-Render-Engine, X-Origin-Host');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
@@ -289,50 +253,10 @@ export default async function handler(req, res) {
 
     if (cleanPath === 'favicon.ico') return res.status(204).end();
 
-    if (!cleanPath || cleanPath === 'api') {
-      if (query.json || query.health) {
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.setHeader(
-          'Cache-Control',
-          'private, no-cache, no-store, max-age=0, must-revalidate, s-maxage=0',
-        );
-        res.setHeader('CDN-Cache-Control', 'no-store');
-        res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
-        res.setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
-        return res.status(200).json({
-          service: 'ImageEngine Edge CDN',
-          status: 'active',
-          version: '2.0.0',
-          allowedTenants: Object.keys(TENANTS),
-          documentation: LANDING_PAGE,
-          contact: CONTACT_URL,
-        });
-      }
-      // Explicit user rule exception: redirect root visitors to landing page
-      res.setHeader(
-        'Cache-Control',
-        'private, no-cache, no-store, max-age=0, must-revalidate',
-      );
-      return res.redirect(307, `${LANDING_PAGE}/`);
-    }
-
-    if (cleanPath === 'health') {
+    if (!cleanPath || cleanPath === 'api' || cleanPath === 'health') {
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.setHeader(
-        'Cache-Control',
-        'private, no-cache, no-store, max-age=0, must-revalidate, s-maxage=0',
-      );
-      res.setHeader('CDN-Cache-Control', 'no-store');
-      res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
-      res.setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
-      return res.status(200).json({
-        service: 'ImageEngine Edge CDN',
-        status: 'active',
-        version: '2.0.0',
-        allowedTenants: Object.keys(TENANTS),
-        documentation: LANDING_PAGE,
-        contact: CONTACT_URL,
-      });
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      return res.status(200).json({ status: 'ok', service: 'imagengine' });
     }
 
     const route = resolveUpstream(cleanPath, query);
@@ -347,24 +271,10 @@ export default async function handler(req, res) {
     const {
       originUrl,
       originHost,
-      tenantKey,
-      tenant,
       withoutExt,
       origExt,
       requestedExt: routeExt,
     } = route;
-
-    if (tenant.rateLimit) {
-      const limit = tenant.dailyLimit || 1000;
-      if (rateLimitExceeded(tenantKey, limit)) {
-        res.setHeader('Retry-After', '86400');
-        return error(
-          res,
-          429,
-          `Daily quota exceeded (${limit}/day). Contact ${CONTACT_URL} for unthrottled access.`,
-        );
-      }
-    }
 
     const requestedExt = normalizeExt(query.format || routeExt || 'webp');
 
@@ -390,7 +300,7 @@ export default async function handler(req, res) {
 
     if (!transformed && source.svg && requestedExt === 'svg') {
       return imageResponse(req, res, Buffer.from(source.svg), {
-        type: 'image/svg+xml; charset=utf-8',
+        type: MIME.svg,
         filename: `${path.basename(withoutExt)}.svg`,
         host: originHost,
         engine: 'edge-passthrough',
