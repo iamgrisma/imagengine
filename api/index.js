@@ -1,10 +1,17 @@
 import sharp from 'sharp';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 process.env.FONTCONFIG_PATH = path.join(__dirname, 'fonts');
 process.env.FONTCONFIG_FILE = path.join(__dirname, 'fonts', 'fonts.conf');
+
+// Serverless CPU & Memory Optimization:
+// Restrict libvips to single-thread per transformation to prevent thread contention on AWS/Vercel.
+// Disable unmanaged internal memory cache to prevent glibc heap fragmentation between warm serverless invocations.
+sharp.concurrency(1);
+sharp.cache(false);
 
 const TENANTS = {
   tn: { domain: 'topnepali.com', rateLimit: false },
@@ -57,7 +64,9 @@ function error(res, status, message) {
   return res.status(status).json({ error: message, status });
 }
 
-function imageResponse(res, body, { type, filename, host, engine }) {
+function imageResponse(req, res, body, { type, filename, host, engine }) {
+  const etag = `"${crypto.createHash('md5').update(body).digest('hex')}"`;
+  res.setHeader('ETag', etag);
   res.setHeader('X-Render-Engine', engine);
   res.setHeader('X-Origin-Host', host);
   res.setHeader('Content-Type', type);
@@ -65,7 +74,12 @@ function imageResponse(res, body, { type, filename, host, engine }) {
   res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
   res.setHeader('Cache-Control', CACHE);
   res.setHeader('CDN-Cache-Control', CDN_CACHE);
+  res.setHeader('Vercel-CDN-Cache-Control', CDN_CACHE);
   res.setHeader('Cloudflare-CDN-Cache-Control', CDN_CACHE);
+
+  if (req && req.headers && req.headers['if-none-match'] === etag) {
+    return res.status(304).end();
+  }
   return res.status(200).send(body);
 }
 
@@ -375,7 +389,7 @@ export default async function handler(req, res) {
     const webpSource = source.type.includes('webp');
 
     if (!transformed && source.svg && requestedExt === 'svg') {
-      return imageResponse(res, Buffer.from(source.svg), {
+      return imageResponse(req, res, Buffer.from(source.svg), {
         type: 'image/svg+xml; charset=utf-8',
         filename: `${path.basename(withoutExt)}.svg`,
         host: originHost,
@@ -384,7 +398,7 @@ export default async function handler(req, res) {
     }
 
     if (!transformed && source.raster && (sameExt || (requestedExt === 'webp' && webpSource))) {
-      return imageResponse(res, source.raster, {
+      return imageResponse(req, res, source.raster, {
         type: MIME[requestedExt] || source.type || 'application/octet-stream',
         filename: `${path.basename(withoutExt)}.${requestedExt}`,
         host: originHost,
@@ -393,7 +407,7 @@ export default async function handler(req, res) {
     }
 
     const result = await transform(source, query, opts, requestedExt);
-    return imageResponse(res, result.buffer, {
+    return imageResponse(req, res, result.buffer, {
       type: result.type,
       filename: `${path.basename(withoutExt) || 'asset'}.${requestedExt}`,
       host: originHost,
