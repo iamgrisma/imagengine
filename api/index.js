@@ -160,8 +160,15 @@ function getOptions(query, cleanPath) {
   let width = hasExplicitW ? parseInt(rawW, 10) : null;
   let height = hasExplicitH ? parseInt(rawH, 10) : null;
 
-  // Only apply default OG or Avatar dimensions if the user DID NOT supply any explicit dimension
-  if (!hasExplicitW && !hasExplicitH) {
+  // Center crop parameters (cw: crop width from center, ch: crop height from center)
+  const rawCw = query.cw || query.cropWidth || query.cropwidth;
+  const rawCh = query.ch || query.cropHeight || query.cropheight;
+  const cropWidth = rawCw ? parseInt(rawCw, 10) : null;
+  const cropHeight = rawCh ? parseInt(rawCh, 10) : null;
+  const hasCrop = Boolean(cropWidth || cropHeight);
+
+  // Only apply default OG or Avatar dimensions if the user DID NOT supply any explicit dimension or crop
+  if (!hasExplicitW && !hasExplicitH && !hasCrop) {
     if (avatar) {
       width = 256;
       height = 256;
@@ -170,12 +177,6 @@ function getOptions(query, cleanPath) {
       height = 630;
     }
   }
-
-  // Center crop parameters (cw: crop width from center, ch: crop height from center)
-  const rawCw = query.cw || query.cropWidth || query.cropwidth;
-  const rawCh = query.ch || query.cropHeight || query.cropheight;
-  const cropWidth = rawCw ? parseInt(rawCw, 10) : null;
-  const cropHeight = rawCh ? parseInt(rawCh, 10) : null;
 
   const rawQuality = query.q || query.quality;
 
