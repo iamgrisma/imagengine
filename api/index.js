@@ -22,6 +22,7 @@ const TENANTS = {
 const ENGINE_KEYS = new Set([
   'format', 'w', 'width', 'h', 'height', 'q', 'quality',
   'avatar', 'fit', 'position', 'blur', 'sharpen', '__path',
+  'cw', 'cropwidth', 'cropWidth', 'ch', 'cropheight', 'cropHeight',
 ]);
 
 const MIME = {
@@ -124,6 +125,11 @@ function resolveUpstream(cleanPath, query = {}) {
     if (!ENGINE_KEYS.has(key)) params.set(key, value);
   }
 
+  // Ensure fresh origin SVG retrieval bypassing stale Cloudflare Worker cache
+  if (originalExt.toLowerCase() === 'svg' && !params.has('_v') && !params.has('v')) {
+    params.set('_v', 'kbd2');
+  }
+
   const qs = params.toString() ? `?${params}` : '';
 
   return {
@@ -146,20 +152,59 @@ function getOptions(query, cleanPath) {
     cleanPath.endsWith('/og') ||
     /(?:^|\/)og(?:-|\.|$)/i.test(cleanPath);
 
-  const width = query.w || query.width;
-  const height = query.h || query.height;
+  const rawW = query.w || query.width;
+  const rawH = query.h || query.height;
+  const hasExplicitW = Boolean(rawW);
+  const hasExplicitH = Boolean(rawH);
+
+  let width = hasExplicitW ? parseInt(rawW, 10) : null;
+  let height = hasExplicitH ? parseInt(rawH, 10) : null;
+
+  // Only apply default OG or Avatar dimensions if the user DID NOT supply any explicit dimension
+  if (!hasExplicitW && !hasExplicitH) {
+    if (avatar) {
+      width = 256;
+      height = 256;
+    } else if (isOg) {
+      width = 1200;
+      height = 630;
+    }
+  }
+
+  // Center crop parameters (cw: crop width from center, ch: crop height from center)
+  const rawCw = query.cw || query.cropWidth || query.cropwidth;
+  const rawCh = query.ch || query.cropHeight || query.cropheight;
+  const cropWidth = rawCw ? parseInt(rawCw, 10) : null;
+  const cropHeight = rawCh ? parseInt(rawCh, 10) : null;
+
   const rawQuality = query.q || query.quality;
+
+  // Fit determination:
+  // If both explicit width and height are provided without query.fit, stretch ('fill') as requested by user.
+  // Otherwise if only one dimension is given, it resizes proportionally (width or height in ratio).
+  let fit = query.fit;
+  if (!fit) {
+    if (hasExplicitW && hasExplicitH) {
+      fit = 'fill';
+    } else {
+      fit = 'cover';
+    }
+  }
 
   return {
     avatar,
     isOg,
-    width: width ? parseInt(width, 10) : avatar ? 256 : isOg ? 1200 : null,
-    height: height ? parseInt(height, 10) : avatar ? 256 : isOg ? 630 : null,
+    hasExplicitW,
+    hasExplicitH,
+    width,
+    height,
+    cropWidth,
+    cropHeight,
     quality: rawQuality
       ? Math.min(Math.max(parseInt(rawQuality, 10), 1), 100)
       : 85,
-    fit: ['cover', 'contain', 'fill', 'inside', 'outside'].includes(query.fit)
-      ? query.fit
+    fit: ['cover', 'contain', 'fill', 'inside', 'outside'].includes(fit)
+      ? fit
       : 'cover',
     position: [
       'top', 'center', 'bottom', 'left', 'right', 'entropy', 'attention',
@@ -173,6 +218,8 @@ function needsTransform(query, opts) {
   return Boolean(
     opts.width ||
     opts.height ||
+    opts.cropWidth ||
+    opts.cropHeight ||
     opts.avatar ||
     opts.isOg ||
     query.q ||
@@ -235,6 +282,19 @@ async function transform(source, query, opts, ext) {
     source.svg ? { density: svgDensity } : undefined,
   );
 
+  // Apply Center Crop (cw / ch) if requested
+  if (opts.cropWidth || opts.cropHeight) {
+    const meta = await img.metadata();
+    const origW = meta.width || 1200;
+    const origH = meta.height || 630;
+    const targetCropW = opts.cropWidth ? Math.min(opts.cropWidth, origW) : origW;
+    const targetCropH = opts.cropHeight ? Math.min(opts.cropHeight, origH) : origH;
+    const left = Math.max(0, Math.floor((origW - targetCropW) / 2));
+    const top = Math.max(0, Math.floor((origH - targetCropH) / 2));
+    img = img.extract({ left, top, width: targetCropW, height: targetCropH });
+  }
+
+  // Apply Resize (w / h)
   if (opts.width && opts.height) {
     img = img.resize(opts.width, opts.height, {
       fit: opts.fit,
