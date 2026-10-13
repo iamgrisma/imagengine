@@ -21,7 +21,7 @@ const TENANTS = {
 
 const ENGINE_KEYS = new Set([
   'format', 'w', 'width', 'h', 'height', 'q', 'quality',
-  'avatar', 'fit', 'position', 'blur', 'sharpen',
+  'avatar', 'fit', 'position', 'blur', 'sharpen', '__path',
 ]);
 
 const MIME = {
@@ -247,7 +247,7 @@ export default async function handler(req, res) {
 
   try {
     const query = req.query || {};
-    const rawPath = req.headers['x-matched-path'] || req.url || '';
+    const rawPath = query.__path || req.headers['x-matched-path'] || req.url || '';
     const [pathname] = rawPath.split('?');
     const cleanPath = pathname.replace(/^\/+|\/+$/g, '');
 
