@@ -37,13 +37,41 @@ const MIME = {
 const CACHE_HEADER = 'public, max-age=31536000, s-maxage=31536000, immutable';
 const CDN_CACHE_HEADER = 'public, max-age=31536000, immutable';
 
+function ensureResponseHelpers(res) {
+  if (!res) return res;
+  if (!res.status) {
+    res.status = function (code) {
+      this.statusCode = code;
+      return this;
+    };
+  }
+  if (!res.json) {
+    res.json = function (data) {
+      if (!this.getHeader || !this.getHeader('Content-Type')) {
+        this.setHeader('Content-Type', 'application/json; charset=utf-8');
+      }
+      this.end(JSON.stringify(data));
+      return this;
+    };
+  }
+  if (!res.send) {
+    res.send = function (body) {
+      this.end(body);
+      return this;
+    };
+  }
+  return res;
+}
+
 function error(res, status, message) {
+  ensureResponseHelpers(res);
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
   return res.status(status).json({ error: message, status });
 }
 
 function imageResponse(req, res, body, { type, filename, host, engine }) {
+  ensureResponseHelpers(res);
   const etag = `"${crypto.createHash('md5').update(body).digest('hex')}"`;
   res.setHeader('ETag', etag);
   res.setHeader('X-Render-Engine', engine);
@@ -238,16 +266,28 @@ async function transform(source, query, opts, ext) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match');
-  res.setHeader('Access-Control-Expose-Headers', 'ETag, Cache-Control, X-Render-Engine, X-Origin-Host');
+  ensureResponseHelpers(res);
+  if (res.setHeader) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match');
+    res.setHeader('Access-Control-Expose-Headers', 'ETag, Cache-Control, X-Render-Engine, X-Origin-Host');
+  }
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const query = req.query || {};
-    const rawPath = query.__path || req.headers['x-matched-path'] || req.url || '';
+    const host = req.headers?.host || 'localhost';
+    let query = req.query;
+    if (!query || typeof query !== 'object') {
+      try {
+        const urlObj = new URL(req.url, `https://${host}`);
+        query = Object.fromEntries(urlObj.searchParams.entries());
+      } catch {
+        query = {};
+      }
+    }
+    const rawPath = query.__path || req.headers?.['x-matched-path'] || req.url || '';
     const [pathname] = rawPath.split('?');
     const cleanPath = pathname.replace(/^\/+|\/+$/g, '');
 
