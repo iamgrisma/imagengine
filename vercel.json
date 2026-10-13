@@ -3,6 +3,9 @@
   "functions": {
     "api/index.js": {
       "includeFiles": "api/fonts/**"
+    },
+    "index.js": {
+      "includeFiles": "api/fonts/**"
     }
   },
   "rewrites": [
